@@ -1,10 +1,12 @@
 # example of configuration file
 
 tag = 'WW'
+tagger = '260928_Run3'
+tag = tag + "_" + tagger
 
 # used by mkShape to define output directory for root files
 # outputDir = 'rootFile'
-outputDir = './'
+outputDir = './rootFile/' + tag
 
 # file with list of aliases
 aliasesFile = 'aliases.py'
@@ -31,7 +33,7 @@ nuisancesFile = 'nuisances.py'
 snapshotFile = 'snapshot.py'
 
 # luminosity to normalize to (in 1/fb)
-lumi = 281.56
+lumi = 307.4
 
 # 2022     lumi = 8.0
 # 2022EE   lumi = 26.7
@@ -39,17 +41,18 @@ lumi = 281.56
 # 2023BPix lumi = 9.5
 # 2024     lumi = 109.08
 # 2025     lumi = 110.48
+# 2026     lumi = 25.84
 #
 # 8.0 + 26.7 + 17.8 + 9.5 + 109.08 + 110.48
 #
 
 # used by mkPlot to define output directory for plots
 # different from "outputDir" to do things more tidy
-outputDirPlots = 'plots'
+outputDirPlots = './plots/' + tag+"2"
 
 
 # used by mkDatacards to define output directory for datacards
-outputDirDatacard = 'datacards'
+outputDirDatacard = './datacards/' + tag
 
 
 

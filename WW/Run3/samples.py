@@ -1,27 +1,56 @@
-#
-# Samples file
-#
-
-samples['top'] = {
-}
-
 
 samples['DY'] = {
 }
 
+samples['top'] = {
+}
+
+samples['ggWW'] = {
+}
+
+samples['WZ'] = {
+}
+
+samples['ZZ'] = {
+}    
+  
+samples['Zg'] = {
+}
+
+samples['Wg'] = {
+}
+
+samples['ZgS'] = {
+} 
+samples['WgS'] = {
+}
+
+samples['WZS'] = {
+}
+
+samples['VVV'] = {
+}
+
+samples['ggH_hww'] = {
+}
+
+samples['qqH_hww'] = {
+}
+
+samples['VBS_SSWW'] = {
+}
+
+samples['VBS_SSWW_WWCM_LL'] = {
+}
+
+samples['VBS_SSWW_WWCM_TL'] = {
+}
+
+samples['VBS_SSWW_WWCM_TT'] = {
+}
 
 samples['DATA'] = {
 }
 
-
-#
-# Useful later on, like aliases.py, nuisances.py, ...
-#
-
-mcALL     = [skey for skey in samples if skey not in ('DATA', 'Fake_lep')]
-ALL       = [skey for skey in samples]
-
-
-
-
-
+samples['Fake'] = {
+}
