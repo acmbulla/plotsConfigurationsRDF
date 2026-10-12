@@ -228,12 +228,15 @@ for kind, label in [
             f'"{fakerates}", "2023_v12_pt");'
         ],
         'function'     : inst_name,
-        # nCleanJet is UInt_t in nanoAOD but operator() takes int, and the typed
-        # Define() does not convert, so pin it here
+        # The typed Define() matches column types exactly and does not convert,
+        # unlike the JIT-compiled 'expr' it replaces. Columns whose branch type
+        # varies between nanoAOD versions are pinned to what operator() declares;
+        # pt/eta/pdgId are float/int in every version used here.
         'variables'    : ['Lepton_pdgId', 'Lepton_pt', 'Lepton_eta',
-                          f'Lepton_isTightMuon_{muWP}',
-                          f'Lepton_isTightElectron_{eleWP}',
-                          'Lepton_muonIdx', 'CleanJet_pt', '(int)nCleanJet'],
+                          f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})',
+                          f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})',
+                          'ROOT::VecOps::RVec<int>(Lepton_muonIdx)',
+                          'CleanJet_pt', '(int)nCleanJet'],
         'samples'      : ['Fake'],
     }
 
@@ -317,8 +320,12 @@ for flavour in ['bc', 'light']:
                 f'"{WP_eval}", "{shift}", "{tagger}", "{eff_map_year}");'
             ],
             'function'     : f'{btagsf}_inst',
+            # Jet_hadronFlavour is UChar_t from NanoAODv12 on but operator()
+            # declares RVecI, and the typed Define() does not convert
             'variables'    : ['CleanJet_pt', 'CleanJet_eta', 'CleanJet_jetIdx',
-                              'nCleanJet', 'Jet_hadronFlavour', f'Jet_btag{bAlgo}'],
+                              'nCleanJet',
+                              'ROOT::VecOps::RVec<int>(Jet_hadronFlavour)',
+                              f'Jet_btag{bAlgo}'],
             'samples'      : mc,
         }
 
