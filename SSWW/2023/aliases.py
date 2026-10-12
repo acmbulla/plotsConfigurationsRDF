@@ -228,10 +228,11 @@ for kind, label in [
             f'"{fakerates}", "2023_v12_pt");'
         ],
         'function'     : inst_name,
-        # The typed Define() matches column types exactly and does not convert,
-        # unlike the JIT-compiled 'expr' it replaces. Columns whose branch type
-        # varies between nanoAOD versions are pinned to what operator() declares;
-        # pt/eta/pdgId are float/int in every version used here.
+        # The typed Define() matches column types exactly and never converts,
+        # unlike the JIT-compiled 'expr' this replaces, so each column is cast to
+        # exactly what operator() declares. nCleanJet is Int_t, which already
+        # matches the int parameter; pt/eta are float and Lepton_pdgId is int,
+        # as VBS_functions.cpp already relies on.
         'variables'    : ['Lepton_pdgId', 'Lepton_pt', 'Lepton_eta',
                           f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})',
                           f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})',
@@ -320,10 +321,15 @@ for flavour in ['bc', 'light']:
                 f'"{WP_eval}", "{shift}", "{tagger}", "{eff_map_year}");'
             ],
             'function'     : f'{btagsf}_inst',
-            # Jet_hadronFlavour is UChar_t from NanoAODv12 on but operator()
-            # declares RVecI, and the typed Define() does not convert
+            # The typed Define() matches column types exactly and never converts,
+            # unlike the JIT-compiled 'expr' this replaces, so every column whose
+            # branch type differs from the operator() parameter is cast here:
+            #   nCleanJet          is Int_t, operator() takes unsigned int
+            #   Jet_hadronFlavour  is UChar_t from NanoAODv12 on, declared RVecI
+            # CleanJet_pt/eta are float and CleanJet_jetIdx really is ULong64_t,
+            # as VBS_functions.cpp already relies on.
             'variables'    : ['CleanJet_pt', 'CleanJet_eta', 'CleanJet_jetIdx',
-                              'nCleanJet',
+                              '(unsigned int)nCleanJet',
                               'ROOT::VecOps::RVec<int>(Jet_hadronFlavour)',
                               f'Jet_btag{bAlgo}'],
             'samples'      : mc,
