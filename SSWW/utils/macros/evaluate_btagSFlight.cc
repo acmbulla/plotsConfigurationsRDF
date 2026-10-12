@@ -15,7 +15,6 @@
 #include "TH2D.h"
 #include "TFile.h"
 #include "correction.h"
-#include <memory>
 
 using namespace ROOT;
 using namespace ROOT::VecOps;
@@ -25,24 +24,11 @@ using correction::CorrectionSet;
 class btagSFlight {
 
   public:
-    btagSFlight(TString eff_map, const std::string corr_year, const std::string WP,
-               const std::string shift, const std::string tagger,
-               const std::string eff_map_year);
+    btagSFlight(TString eff_map, const std::string year);
+    ~btagSFlight();
 
-    std::shared_ptr<TH2F> h_ljet_eff;
-    // shared_ptr rather than unique_ptr: RDataFrame's typed Define() takes the
-    // callable by value, so this class must stay copyable. Copies share the
-    // efficiency maps and the CorrectionSet instead of reloading them.
-    std::shared_ptr<CorrectionSet> cset;
-
-    // fixed per instance — one instance per (WP, shift) variation
-    std::string WP_;
-    std::string shift_;
-    std::string eff_map_year_;
-
-    // resolved once in the constructor instead of on every event
-    correction::Correction::Ref cset_btag_light_;
-    correction::Correction::Ref cset_btag_wps_;
+    TH2F* h_ljet_eff;
+    std::unique_ptr<CorrectionSet> cset;
  
     float operator()(
         RVecF CleanJet_pt,
@@ -50,19 +36,35 @@ class btagSFlight {
         RVec<ULong64_t> CleanJet_jetIdx,
         unsigned int nCleanJet,
         RVecI Jet_hadronFlavour,
-        RVecF Jet_btag
+        RVecF Jet_btag,
+        const std::string WP,
+        const std::string shift,
+        const std::string tagger,
+        const std::string year
       )
     {
+        correction::Correction::Ref cset_btag_light;
+        correction::Correction::Ref cset_btag_wps;
+        if (year == "None")
+        {
+            cset_btag_light = cset->at(tagger + "_negtagDY");
+            cset_btag_wps   = cset->at(tagger + "_wp_values");
+        }
+        else
+        {
+            cset_btag_light = cset->at(tagger + "_light");
+            cset_btag_wps   = cset->at(tagger + "_wp_values");
+        }
      
         float btag_sf = 1.;
         for (unsigned iJ{0}; iJ != nCleanJet; ++iJ) 
         {
             if (CleanJet_pt[iJ] <= 20. || std::abs(CleanJet_eta[iJ]) >= 2.5) continue;
 
-            if (Jet_btag[CleanJet_jetIdx[iJ]] > cset_btag_wps_->evaluate({WP_})) 
+            if (Jet_btag[CleanJet_jetIdx[iJ]] > cset_btag_wps->evaluate({WP})) 
             {
                 if (Jet_hadronFlavour[CleanJet_jetIdx[iJ]] == 0) 
-                    btag_sf *= cset_btag_light_->evaluate({shift_, WP_, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]});
+                    btag_sf *= cset_btag_light->evaluate({shift, WP, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]});
             }
             else 
             {
@@ -70,7 +72,7 @@ class btagSFlight {
                 if (btag_eff == 1.) continue;
 
                 if (Jet_hadronFlavour[CleanJet_jetIdx[iJ]] == 0)
-                    btag_sf *= (1-btag_eff*cset_btag_light_->evaluate({shift_, WP_, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]}))/(1-btag_eff);
+                    btag_sf *= (1-btag_eff*cset_btag_light->evaluate({shift, WP, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]}))/(1-btag_eff);
             }
         }
         return btag_sf;
@@ -80,10 +82,7 @@ class btagSFlight {
     float getEff(float pt, float eta, int flavour);
 };
 
-btagSFlight::btagSFlight(TString eff_map, const std::string corr_year, const std::string WP,
-                        const std::string shift, const std::string tagger,
-                        const std::string eff_map_year)
-  : WP_(WP), shift_(shift), eff_map_year_(eff_map_year) {
+btagSFlight::btagSFlight(TString eff_map, const std::string year) {
     
     // --- Patch graphics classes first ---
     //const char* graphicsClasses[] = { "TPaletteAxis", "TCanvas", "TFrame", "TAttBBox2D", "TBox" };
@@ -97,35 +96,29 @@ btagSFlight::btagSFlight(TString eff_map, const std::string corr_year, const std
     // size_t stop   = to_replace.length();
     // home.replace(start, stop, "");
 
-    if (corr_year == "None")
+    if (year == "None")
     {
-        cset = CorrectionSet::from_file("/cvmfs/cms-griddata.cern.ch/cat/metadata/BTV/" + corr_year + "/latest/btagging_preliminary.json.gz");
+        cset = CorrectionSet::from_file("/cvmfs/cms-griddata.cern.ch/cat/metadata/BTV/" + year + "/latest/btagging_preliminary.json.gz");
     }
     else
     {
-       cset = CorrectionSet::from_file("/cvmfs/cms-griddata.cern.ch/cat/metadata/BTV/" + corr_year + "/latest/btagging.json.gz"); 
+       cset = CorrectionSet::from_file("/cvmfs/cms-griddata.cern.ch/cat/metadata/BTV/" + year + "/latest/btagging.json.gz"); 
     }
-
-    // resolved here, once per job, rather than per event in operator()
-    if (eff_map_year_ == "None")
-      cset_btag_light_ = cset->at(tagger + "_negtagDY");
-    else
-      cset_btag_light_ = cset->at(tagger + "_light");
-    cset_btag_wps_ = cset->at(tagger + "_wp_values");
 
     TFile *reff = TFile::Open(eff_map, "READ");
     if (!reff || reff->IsZombie()) {
         std::cerr << "Error opening file " << eff_map << std::endl;
+        h_ljet_eff = nullptr;
         return;
     }
 
     //h_ljet_eff = (TH2F*)reff->Get("ljet_eff")->Clone();
     //if (h_ljet_eff) h_ljet_eff->SetDirectory(0);
     //reff->Close();
-    if (auto* _h = dynamic_cast<TH2F*>(reff->Get("ljet_eff"))) {
-      auto* _clone = static_cast<TH2F*>(_h->Clone());
-      _clone->SetDirectory(nullptr);
-      h_ljet_eff.reset(_clone);
+    h_ljet_eff = dynamic_cast<TH2F*>(reff->Get("ljet_eff"));
+    if (h_ljet_eff) {
+      h_ljet_eff = (TH2F*)h_ljet_eff->Clone();
+      h_ljet_eff->SetDirectory(0);
     }
 }
 
@@ -135,6 +128,11 @@ float btagSFlight::getEff(float pt, float eta, int flavour) {
     int xbin = h_ljet_eff->GetXaxis()->FindBin(pt);
     int ybin = h_ljet_eff->GetYaxis()->FindBin(eta);
     return h_ljet_eff->GetBinContent(xbin, ybin);
+}
+
+btagSFlight::~btagSFlight() {
+    std::cout << "Cleaning up memory" << std::endl;
+    if (h_ljet_eff) h_ljet_eff->Delete();
 }
 
 #endif
