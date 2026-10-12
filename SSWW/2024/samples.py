@@ -119,7 +119,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
 samples['DY'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -147,7 +147,7 @@ files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
 samples['top'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -172,7 +172,7 @@ files = nanoGetSampleFiles(mcDirectory, 'TTLNu') | \
 samples['tVx'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -204,7 +204,7 @@ files = nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuENu') | \
 samples['ggWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -220,7 +220,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WZJJ_EWK')
 samples['WZJJ_EWK'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -230,7 +230,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD')
 samples['WZJJ_QCD'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -240,7 +240,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WZJJ_Interference')
 samples['WZJJ_Int'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -265,7 +265,7 @@ files = nanoGetSampleFiles(mcDirectory, 'ZZJJTo4L_EWK') | \
 samples['ZZ'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }   
@@ -275,7 +275,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WW_DPS')
 samples['WW_DPS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }    
@@ -304,7 +304,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') 
 samples['Zg'] = {
     'name': files,
     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -319,7 +319,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
 samples['Wg'] = {
     'name': files,
     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -345,7 +345,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') 
 samples['ZgS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -369,7 +369,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
 samples['WgS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -385,7 +385,7 @@ files =  nanoGetSampleFiles(mcDirectory, "WZJJ_EWK")
 samples['WZSJJ_EWK'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -399,7 +399,7 @@ files =  nanoGetSampleFiles(mcDirectory, "WZJJ_QCD") | \
 samples['WZSJJ_QCD'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -424,7 +424,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WWW') | \
 samples['VVV'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -438,7 +438,7 @@ files = nanoGetSampleFiles(mcDirectory, 'GluGluHToWWTo2L2Nu_M125')
 samples['ggH_hww'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -448,7 +448,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBFHToWWTo2L2Nu_M125')
 samples['qqH_hww'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -463,7 +463,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VH-HToNon2B') | \
 samples['higgs'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -475,7 +475,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWmJJ_QCD_noTop') | \
 samples['OSWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 2000000,
+    'MaxEventsPerJob': 2000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -490,7 +490,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW')
 samples['VBS_SSWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -501,7 +501,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_LL')
 samples['VBS_SSWW_WWCM_LL'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -511,7 +511,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TL')
 samples['VBS_SSWW_WWCM_TL'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -521,7 +521,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TT')
 samples['VBS_SSWW_WWCM_TT'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -531,7 +531,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_EWK_noTop')
 samples['WW_EWK'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -541,7 +541,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_QCD_noTop')
 samples['WW_QCD'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
@@ -551,7 +551,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_Interference')
 samples['WW_Int'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 1000000,
+    'MaxEventsPerJob': 1000000,
 #    'splitParts': 10,
 #    'useParts'  : [0, 1, 2, 3],
 }
