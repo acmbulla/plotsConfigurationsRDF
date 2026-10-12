@@ -73,8 +73,6 @@ public:
   TH2F* prompt_rate_muon_;
   TH2F* prompt_rate_ele_;
 
-  int   isTight_[3];
-
   float operator()(RVecI Lepton_pdgId,
 				   RVecF Lepton_pt,
 				   RVecF Lepton_eta,
@@ -85,11 +83,17 @@ public:
 				   int   nCleanJet
 				   ){
 
+    // The Define() column is evaluated for every event, including events whose
+    // multiplicity is not the one this instance was built for -- and the loop
+    // below indexes Lepton_* up to nLeptons_. Leaving at once keeps the
+    // per-multiplicity instances mutually exclusive, so they can be summed.
+    if (Lepton_pt.size() != nLeptons_) return 0.;
+
     double SF = 1.; 
 
-    isTight_[0] = 0;
-    isTight_[1] = 0;
-    isTight_[2] = 0;
+    // Local, not a member: operator() has to stay re-entrant, or two
+    // RDataFrame threads would share this array once implicit MT is enabled.
+    int   isTight_[3] = {0, 0, 0};
 
     // Build tight lepton definitions
     for (unsigned int i = 0; i < nLeptons_ ; i++) {
