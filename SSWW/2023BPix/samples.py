@@ -102,7 +102,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYto2L-2Jets_MLL-10to50') | \
 samples['DY'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 240000,
+    'MaxEventsPerJob': 240000,
 }
 
 
@@ -129,7 +129,7 @@ files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
 samples['top'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 240000,
+    'MaxEventsPerJob': 240000,
 }
 addSubSampleWeights(samples,'top','TTTo2L2Nu','Top_pTrw')
 
@@ -152,7 +152,7 @@ files = nanoGetSampleFiles(mcDirectory, 'TTLNu') | \
 samples['tVx'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # ##########################################
@@ -182,7 +182,7 @@ files = nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuENu') | \
 samples['ggWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 240000,
+    'MaxEventsPerJob': 240000,
 }
 
 
@@ -197,7 +197,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WZJJ_EWK')
 samples['WZJJ_EWK'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD') 
@@ -205,14 +205,14 @@ files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD')
 samples['WZJJ_QCD'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 files = nanoGetSampleFiles(mcDirectory, 'WZJJ_Interference') 
 samples['WZJJ_Int'] = {
     'name': files,
     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # ZZto2L2Nu-2Jets_QCD_TuneCP5_13p6TeV_madgraph-pythia8
@@ -235,7 +235,7 @@ files = nanoGetSampleFiles(mcDirectory, 'ZZJJTo4L_EWK') | \
 samples['ZZ'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # WW_DoubleScattering_TuneCP5_13p6TeV_pythia8
@@ -243,7 +243,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WW_DPS')
 samples['WW_DPS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }    
 
 # ##################
@@ -270,7 +270,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') 
 samples['Zg'] = {
     'name': files,
     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # /WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
@@ -283,7 +283,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
 samples['Wg'] = {
     'name': files,
     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # DYGto2LG-1Jets_MLL-4to50_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
@@ -307,7 +307,7 @@ files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') 
 samples['ZgS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-4to50_PTG-10to100", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
@@ -330,7 +330,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
 samples['WgS'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG10to100", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
@@ -346,7 +346,7 @@ files =  nanoGetSampleFiles(mcDirectory, "WZJJ_EWK")
 samples['WZSJJ_EWK'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 addSubSampleWeights(samples, 'WZSJJ_EWK', "WZJJ_EWK", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
@@ -358,7 +358,7 @@ files =  nanoGetSampleFiles(mcDirectory, "WZJJ_QCD") | \
 samples['WZSJJ_QCD'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_QCD", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
@@ -382,7 +382,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WWW') | \
 samples['VVV'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 # ##################
 # ###    Higgs   ###
@@ -393,7 +393,7 @@ files = nanoGetSampleFiles(mcDirectory, 'GluGluHToWWTo2L2Nu_M125')
 samples['ggH_hww'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # VBFHto2Wto2L2Nu_M-125_TuneCP5_13p6TeV_powheg-jhugen752-pythia8
@@ -402,7 +402,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBFHToWWTo2L2Nu_M125')
 samples['qqH_hww'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 files = nanoGetSampleFiles(mcDirectory, 'VH-HToNon2B') | \
@@ -415,7 +415,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VH-HToNon2B') | \
 samples['higgs'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 # # OS WW
@@ -425,7 +425,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWmJJ_QCD_noTop') | \
 samples['OSWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 500000,
+    'MaxEventsPerJob': 500000,
 }
 
 
@@ -440,7 +440,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW')
 samples['VBS_SSWW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 #### polarized:
@@ -450,7 +450,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_LL')
 samples['VBS_SSWW_WWCM_LL'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # VBS-SSWW_PolarizationTL_TuneCP5_13p6TeV_madgraph-pythia8
@@ -458,7 +458,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TL')
 samples['VBS_SSWW_WWCM_TL'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # VBS-SSWW_PolarizationTT_TuneCP5_13p6TeV_madgraph-pythia8
@@ -466,7 +466,7 @@ files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TT')
 samples['VBS_SSWW_WWCM_TT'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # WWto2L2Nu-2Jets_SS_noTop_EW_TuneCP5_13p6TeV_madgraph-pythia8
@@ -474,7 +474,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_EWK_noTop')
 samples['WW_EWK'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # WWto2L2Nu-2Jets_SS_noTop_QCD_TuneCP5_13p6TeV_madgraph-pythia8
@@ -482,7 +482,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_QCD_noTop')
 samples['WW_QCD'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # SSWWJJ_Interference_TuneCP5_13p6TeV_madgraph-pythia8
@@ -490,7 +490,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_Interference')
 samples['WW_Int'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'EventsPerJob': 250000,
+    'MaxEventsPerJob': 250000,
 }
 
 # ###########

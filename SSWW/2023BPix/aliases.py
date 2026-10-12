@@ -206,15 +206,6 @@ aliases['noJetInHorn'] = {
     'samples' : ALL
 }
 
-fake_rate_macro = open(f'{macros}fake_rate_reader_class.cc').read()
-
-aliases['_fakeRateDecl'] = {
-    'linesToAdd'    : ['#include "TInterpreter.h"'],
-    'linesToProcess': [f'gInterpreter->Declare(R"FAKE({fake_rate_macro})FAKE");'],
-    'expr'          : '1.',
-    'samples'       : ['Fake'],
-}
-
 for kind, label in [
     ('nominal',     ''),
     ('EleUp',       'EleUp'),
@@ -229,19 +220,21 @@ for kind, label in [
     alias_name = 'fakeW' + label
     inst_name  = 'fr_reader_' + (label if label else 'nominal')
     aliases[alias_name] = {
-        'linesToAdd'    : ['#include "TInterpreter.h"'],
-        'linesToProcess': [
-            f'gInterpreter->Declare("fake_rate_reader {inst_name}('
-            f'\\\"{eleWP}\\\", \\\"{muWP}\\\", \\\"{kind}\\\", 2, \\\"std\\\", '
-            f'\\\"{fakerates}\\\", \\\"2023BPix_v12_pt\\\");");',
+        # the class is compiled into the generated .cpp, not declared at runtime
+        'external'     : f'{macros}fake_rate_reader_class.cc',
+        # one global instance per variation, built before main()
+        'linesToGlobal': [
+            f'fake_rate_reader {inst_name}("{eleWP}", "{muWP}", "{kind}", 2, "std", '
+            f'"{fakerates}", "2023BPix_v12_pt");'
         ],
-        'expr': (
-            f'{inst_name}('
-            f'Lepton_pdgId, Lepton_pt, Lepton_eta, '
-            f'Lepton_isTightMuon_{muWP}, Lepton_isTightElectron_{eleWP}, '
-            f'Lepton_muonIdx, CleanJet_pt, nCleanJet)'
-        ),
-        'samples': ['Fake'],
+        'function'     : inst_name,
+        # nCleanJet is UInt_t in nanoAOD but operator() takes int, and the typed
+        # Define() does not convert, so pin it here
+        'variables'    : ['Lepton_pdgId', 'Lepton_pt', 'Lepton_eta',
+                          f'Lepton_isTightMuon_{muWP}',
+                          f'Lepton_isTightElectron_{eleWP}',
+                          'Lepton_muonIdx', 'CleanJet_pt', '(int)nCleanJet'],
+        'samples'      : ['Fake'],
     }
 
 #Top pT reweighting
@@ -317,31 +310,21 @@ shifts_needed = {
     'light': ['central', 'up_correlated', 'down_correlated', 'up_uncorrelated', 'down_uncorrelated'],
 }
 
-# Dichiara la classe una volta sola
+# One instance per (flavour, shift): the configuration lives in the constructor,
+# so operator() takes only columns and can be used by the typed Define().
 for flavour in ['bc', 'light']:
-    macro_content = open(f'{macros}evaluate_btagSF{flavour}.cc').read()
-    
-    aliases[f'_btagSF{flavour}Decl'] = {
-        'linesToAdd'    : ['#include "TInterpreter.h"'],
-        'linesToProcess': [f'gInterpreter->Declare(R"BTAG({macro_content})BTAG");'],
-        'expr'          : '1.',
-        'samples'       : mc,
-    }
-    
-    # Poi per ogni variante solo ProcessLine + expr
     for shift in shifts_needed[flavour]:
         btagsf = 'btagSF' + flavour + ('' if shift == 'central' else '_' + shift)
         aliases[btagsf] = {
-            'linesToAdd'    : ['#include "TInterpreter.h"'],
-            'linesToProcess': [
-                f'gInterpreter->ProcessLine("btagSF{flavour} {btagsf}_inst('
-                f'\\"{eff_map_path}\\", \\"{year}\\");");',
+            'external'     : f'{macros}evaluate_btagSF{flavour}.cc',
+            'linesToGlobal': [
+                f'btagSF{flavour} {btagsf}_inst("{eff_map_path}", "{year}", '
+                f'"{WP_eval}", "{shift}", "{tagger}", "{eff_map_year}");'
             ],
-            'expr': (
-                f"{btagsf}_inst(CleanJet_pt, CleanJet_eta, CleanJet_jetIdx, nCleanJet, "
-                f"Jet_hadronFlavour, Jet_btag{bAlgo}, '{WP_eval}', '{shift}', '{tagger}', '{eff_map_year}')"
-            ),
-            'samples': mc,
+            'function'     : f'{btagsf}_inst',
+            'variables'    : ['CleanJet_pt', 'CleanJet_eta', 'CleanJet_jetIdx',
+                              'nCleanJet', 'Jet_hadronFlavour', f'Jet_btag{bAlgo}'],
+            'samples'      : mc,
         }
 
 # B tagging selections and scale factors
