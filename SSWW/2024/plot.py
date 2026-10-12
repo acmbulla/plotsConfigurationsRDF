@@ -72,7 +72,7 @@ groupPlot['WZ_EWK'] = {
     'nameHR'  : 'WZ EWK',
     'isSignal': 0,
     'color'   : rgb(*palette["RoseWZ"]),
-    'samples' : ['WZJJ_EWK', 'WZSJJ_EWK'],
+    'samples' : ['WZJJ_EWK'],
     'fill'    : 1001,
 }
 
@@ -80,7 +80,7 @@ groupPlot['WZ_QCD'] = {
     'nameHR'  : 'WZ QCD',
     'isSignal': 0,
     'color'   : rgb(*palette["MediumBlue"]),
-    'samples' : ['WZJJ_QCD', 'WZSJJ_QCD', 'WZJJ_Int'],
+    'samples' : ['WZJJ_QCD'],
     'fill'    : 1001,
 }
 
@@ -180,7 +180,7 @@ plot['WZJJ_QCD'] = {
     'color'   : rgb(*palette["Violet"]),
     'isSignal': 0,
     'isData'  : 0,
-    'scale'   : 1.0,
+    'scale'   : 0.5,
 }
 
 plot['WZJJ_Int'] = {

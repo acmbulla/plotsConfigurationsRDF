@@ -9,7 +9,7 @@ import inspect
 
 ALL = [skey for skey in samples]
 mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
-lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ')]
+lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
 btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
 macros = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/macros/'

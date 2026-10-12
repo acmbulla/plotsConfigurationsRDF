@@ -1,7 +1,3 @@
-
-#
-# Cut to be applied on top of everything else --> speed up
-#
 # ------------------------------------------------
 # Supercut: loose preselection applied to all events
 # - at least 2 leptons, fewer than 5
@@ -31,6 +27,7 @@ supercut = (
 #     'expr': (
 #         'bVeto'
 #         ' && PuppiMET_pt < 30'
+#         ' && mtw1 < 20'
 #         ' && !('
 #         '    Lepton_pt.size() == 2'
 #         '    && (Lepton_pdgId[0] + Lepton_pdgId[1]) == 0'
@@ -52,6 +49,7 @@ supercut = (
 #     'expr': (
 #         'bVeto'
 #         ' && PuppiMET_pt < 30'
+#         ' && mtw1 < 20'
 #         ' && Lepton_pt.size() == 2'
 #         ' && (Lepton_pdgId[0] + Lepton_pdgId[1]) == 0'
 #         ' && mll > 60 && mll < 120'
@@ -71,6 +69,7 @@ supercut = (
 #     'expr': (
 #         'bReq'
 #         ' && PuppiMET_pt < 30'
+#         ' && mtw1 < 20'
 #         ' && !('
 #         '    Lepton_pt.size() == 2'
 #         '    && (Lepton_pdgId[0] + Lepton_pdgId[1]) == 0'
@@ -91,7 +90,7 @@ cuts['WW_SR'] = {
     'expr': (
         'Lepton_pt.size() == 2'
         ' && Lepton_pt[1] > 20'
-        ' && (ee || mumu || emu)'          # same-sign in base region
+        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'          # same-sign in base region
         ' && mll > 20'
         ' && PuppiMET_pt > 30'
         ' && bVeto'
@@ -140,7 +139,7 @@ cuts['nonprompt_CR'] = {
     'expr': (
         'Lepton_pt.size() == 2'
         ' && Lepton_pt[1] > 20'
-        ' && (ee || mumu || emu)'
+        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
         ' && PuppiMET_pt > 30'
         ' && bReq'
@@ -188,7 +187,7 @@ cuts['WW_VR_bveto'] = {
     'expr': (
         'Lepton_pt.size() == 2'
         ' && Lepton_pt[1] > 20'
-        ' && (ee || mumu || emu)'
+        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
         ' && PuppiMET_pt > 30'
         ' && bVeto'
@@ -206,7 +205,7 @@ cuts['WW_VR_btag'] = {
     'expr': (
         'Lepton_pt.size() == 2'
         ' && Lepton_pt[1] > 20'
-        ' && (ee || mumu || emu)'
+        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
         ' && PuppiMET_pt > 30'
         ' && bReq'
@@ -290,6 +289,3 @@ cuts['ZZ_VR'] = {
     #     'mmmm' : 'mmmm',
     # }
 }
-
-
-
