@@ -1,11 +1,9 @@
 # example of configuration file
 
 tag = 'WW'
-# tagger = '091126_test'
-tagger = '261007_test26'
 
 # used by mkShape to define output directory for root files
-outputDir = 'rootFile/' + tagger
+outputDir = 'rootFile'
 
 # file with list of aliases
 aliasesFile = 'aliases.py'
@@ -32,14 +30,16 @@ nuisancesFile = 'nuisances.py'
 snapshotFile = 'snapshot.py'
 
 # luminosity to normalize to (in 1/fb)
-lumi = 25.84
+lumi = 30
+# FIXME to be updated
 
 # used by mkPlot to define output directory for plots
 # different from "outputDir" to do things more tidy
-outputDirPlots = 'plots/' + tagger
+outputDirPlots = 'plots'
+
 
 # used by mkDatacards to define output directory for datacards
-outputDirDatacard = 'datacards/' + tagger
+outputDirDatacard = 'datacards'
 
-scripts_run_folder    = "${MY_PATH_JOBS}/2026/"+tag+"_"+tagger+"/run_scripts"
-script_batch_location = "${MY_PATH_JOBS}/2026/"+tag+"_"+tagger+"/batch_scripts"
+
+
