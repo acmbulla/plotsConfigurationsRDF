@@ -1,7 +1,7 @@
 # example of configuration file
 import os
 
-tag = 'WW'
+tag = 'SSWW'
 tagger = '260915_Fakes'
 
 # used by mkShape to define output directory for root files

@@ -11,9 +11,9 @@ ALL = [skey for skey in samples]
 mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
 lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ')]
 
-btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/WW/utils/data/btag'
+btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
 macros = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/macros/'
-fakerates = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/WW/utils/data/FakeRate'
+fakerates = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/FakeRate'
 
 
 #tomas kello
