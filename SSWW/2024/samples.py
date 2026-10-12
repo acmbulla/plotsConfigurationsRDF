@@ -1,0 +1,609 @@
+from search_files import SearchFiles
+import os
+searchFiles = SearchFiles()
+
+useXROOTD = False
+redirector = 'root://eoscms.cern.ch/'
+
+mcProduction       = 'Summer24_150x_nAODv15_Full2024v15'
+mcSteps            = 'MCl2loose2024v15__MCCorr2024v15__JERFrom23BPix__l2tight'
+dataRecoEGamma     = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_EGamma'
+dataRecoMuon       = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_Muon'
+dataRecoMuonEG     = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_MuonEG'
+dataSteps          = 'DATAl2loose2024v15__l2loose'
+
+##############################################
+###### Tree base directory for the site ######
+##############################################
+treeBaseDir = '/eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano'
+limitFiles = -1
+
+def makeMCDirectory(var=""):
+    _treeBaseDir = treeBaseDir + ""
+    if var == "":
+        return "/".join([_treeBaseDir, mcProduction, mcSteps])
+    else:
+        return "/".join([_treeBaseDir, mcProduction, mcSteps + "__" + var])
+
+
+
+mcDirectory   = makeMCDirectory()
+print(mcDirectory)
+dataDirectoryMuon = os.path.join(treeBaseDir, dataRecoMuon, dataSteps)
+dataDirectoryEGamma = os.path.join(treeBaseDir, dataRecoEGamma, dataSteps)
+dataDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, dataSteps)
+
+
+def nanoGetSampleFiles(path, name):
+  _files = searchFiles.searchFiles(path, name, redirector=redirector)
+  return  {name : _files}
+
+
+def addSubSampleWeights(samples, sampleName, subSampleName, weight):
+  if 'weights' not in samples[sampleName].keys():
+    samples[sampleName]['weights'] = {}
+  if subSampleName in samples[sampleName]['weights'].keys():
+    samples[sampleName]['weights'][subSampleName] = "(" + samples[sampleName]['weights'][subSampleName] + ") * " +  weight
+  else :
+    samples[sampleName]['weights'][subSampleName] = weight
+
+
+
+
+################################################
+############ DATA DECLARATION ##################
+################################################
+
+DataRun = [
+    ['C',   'Run2024C-ReReco-v1'],
+    ['D',   'Run2024D-ReReco-v1'],
+    ['E',   'Run2024E-ReReco-v1'],
+    ['F',   'Run2024F-Prompt-v1'],
+    ['G',   'Run2024G-Prompt-v1'],
+    ['H',   'Run2024H-Prompt-v1'],
+    ['Iv1', 'Run2024I-Prompt-v1'],
+    ['Iv2', 'Run2024I-Prompt-v2'],
+]
+
+DataSets = [
+    'MuonEG',
+    'Muon0',
+    'Muon1',
+    'EGamma0',
+    'EGamma1'
+]
+
+DataTrig = {
+    'MuonEG' : 'Trigger_ElMu',
+    'Muon0'  : '!Trigger_ElMu && (Trigger_sngMu || Trigger_dblMu)',
+    'Muon1'  : '!Trigger_ElMu && (Trigger_sngMu || Trigger_dblMu)',
+    'EGamma0': '!Trigger_ElMu && !Trigger_sngMu && !Trigger_dblMu && (Trigger_sngEl || Trigger_dblEl)',
+    'EGamma1': '!Trigger_ElMu && !Trigger_sngMu && !Trigger_dblMu && (Trigger_sngEl || Trigger_dblEl)',
+}
+
+#########################################
+############ MC COMMON ##################
+#########################################
+
+# tomas kello
+# mcCommonWeightNoMatch = 'XSWeight*METFilter_Common*SFweight'
+# mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatch2l*SFweight'
+
+mcCommonWeightNoMatch = 'XSWeight*METFilter_Common*SFweight'
+mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatch2l*SFweight'
+
+# mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * PromptGenLepMatch2l'
+# mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * METFilter_MC * PromptGenLepMatch2l'
+# mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * Jet_PUIDSF * METFilter_MC * PromptGenLepMatch2l'
+# mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * Jet_PUIDSF * btagSF * METFilter_MC * PromptGenLepMatch2l'
+
+
+
+
+##########
+### DY ###
+##########
+# DYto2E-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYto2Mu-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYto2Tau-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYto2E_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
+# DYto2Mu_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
+# DYto2Tau_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-10to50')
+samples['DY'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+
+############
+### Top   ##
+############
+# TTto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
+# TbarWplusto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
+# TWminusto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
+# TBbarQtoLNu-t-channel-4FS_TuneCP5_13p6TeV_powheg-madspin-pythia8
+# TbarBQtoLNu-t-channel-4FS_TuneCP5_13p6TeV_powheg-madspin-pythia8
+# TBbartoLNu-s-channel_TuneCP5_13p6TeV_powheg-pythia8
+# TbarBtoLNu-s-channel_TuneCP5_13p6TeV_powheg-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'TbarWplusto2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'TWminusto2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_t-channel_top') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_t-channel_antitop') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_s-channel_plus') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_s-channel_minus')
+
+samples['top'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+addSubSampleWeights (samples, 'top', 'TTTo2L2Nu', 'Top_pTrw')
+
+# # tVx
+# TTLNu-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# TTLL_MLL-4to50_TuneCP5_13p6TeV_amcatnlo-pythia8
+# TTLL_MLL-50_TuneCP5_13p6TeV_amcatnlo-pythia8
+# TZQB-Zto2L-4FS_MLL-30_TuneCP5_13p6TeV_amcatnlo-pythia8
+# TTWW_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+# TTZZ_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'TTLNu') | \
+        nanoGetSampleFiles(mcDirectory, 'TTLL_MLL-4to50') | \
+        nanoGetSampleFiles(mcDirectory, 'TTLL_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'TZQB-ZTo2L') | \
+        nanoGetSampleFiles(mcDirectory, 'TTWW') | \
+        nanoGetSampleFiles(mcDirectory, 'TTZZ') 
+
+
+samples['tVx'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+##########################################
+## WW QCD and gluon-induced background ###
+##########################################
+
+# GluGluWWto2E2Nu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoENuMuNu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoENuTauNu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoMuNuENu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWto2Mu2Nu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoMuNuTauNu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoTauNuENu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWtoTauNuMuNu_TuneCP5_13p6TeV_mcfm-pythia8
+# GluGluWWto2Tau2Nu_TuneCP5_13p6TeV_mcfm-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuENu') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuMuNu') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuTauNu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuENu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuMuNu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuTauNu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuENu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuMuNu') |	\
+        nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuTauNu')
+
+samples['ggWW'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# ##########
+# ### VZ ###
+# ##########
+# # WZTo3LNu-2Jets-EWK_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+# # WZTo3LNu-2Jets-QCD_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+# # VBSWZ-Interference_TuneCP5_13p6TeV_madgraph-pythia8
+
+# files = nanoGetSampleFiles(mcDirectory, 'WZJJ_EWK')
+# samples['WZJJ_EWK'] = {
+#     'name': files,
+#     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
+#     'EventsPerJob': 1000000,
+# #    'splitParts': 10,
+# #    'useParts'  : [0, 1, 2, 3],
+# }
+
+# files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD')
+
+# samples['WZJJ_QCD'] = {
+#     'name': files,
+#     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
+#     'EventsPerJob': 1000000,
+# #    'splitParts': 10,
+# #    'useParts'  : [0, 1, 2, 3],
+# }
+
+# files = nanoGetSampleFiles(mcDirectory, 'WZJJ_Interference')
+
+# samples['WZJJ_Int'] = {
+#     'name': files,
+#     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
+#     'EventsPerJob': 1000000,
+# #    'splitParts': 10,
+# #    'useParts'  : [0, 1, 2, 3],
+# }
+
+# ZZto2L2Nu-2Jets_QCD_TuneCP5_13p6TeV_madgraph-pythia8
+# ZZto2L2Nu-2Jets_EW_TuneCP5_13p6TeV_madgraph-pythia8
+# ZZto4L-2Jets_QCD_TuneCP5_13p6TeV_madgraph-pythia8
+# ZZto4L-2Jets_EW_TuneCP5_13p6TeV_madgraph-pythia8
+# GluGlutoContinto2Zto4Tau_TuneCP5_13p6TeV_mcfm701-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'ZZJJTo4L_EWK') | \
+        nanoGetSampleFiles(mcDirectory, 'ZZJJTo4L_QCD') | \
+        nanoGetSampleFiles(mcDirectory, 'ZZJJTo2L2Nu_EWK') | \
+        nanoGetSampleFiles(mcDirectory, 'ZZJJTo2L2Nu_QCD') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo4e') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo4mu') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo4tau') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo2e2mu') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo2e2tau') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluToZZTo2mu2tau')
+
+samples['ZZ'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}   
+
+# WW_DoubleScattering_TuneCP5_13p6TeV_pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WW_DPS')
+samples['WW_DPS'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}    
+
+# ##################
+# ### Vg/VgS/VZS ###
+# ##################
+# DYGto2LG-1Jets_MLL-4to50_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-4to50_PTG-100to200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-4to50_PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-100to200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-200to400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-400to600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-200to400') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-400to600') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-600')
+
+samples['Zg'] = {
+    'name': files,
+    'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# /WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG200to400') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG400to600') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG600')
+
+samples['Wg'] = {
+    'name': files,
+    'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# DYGto2LG-1Jets_MLL-4to50_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-4to50_PTG-100to200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-4to50_PTG-200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-10to100_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-100to200_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-200to400_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-400to600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+# DYGto2LG-1Jets_MLL-50_PTG-600_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-4to50_PTG-200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-200to400') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-400to600') | \
+        nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_MLL-50_PTG-600')
+
+samples['ZgS'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-4to50_PTG-10to100", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-4to50_PTG-100to200", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-4to50_PTG-200", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-50_PTG-10to100", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-50_PTG-100to200", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-50_PTG-200to400", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-50_PTG-400to600", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_MLL-50_PTG-600", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+
+# WGtoLNuG-1Jets_PTG-*_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+
+files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG10to100') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG100to200') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG200to400') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG400to600') | \
+        nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J_PTG600')
+
+samples['WgS'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG10to100", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG100to200", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG200to400", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG400to600", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J_PTG600", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+
+# # WZto3LNu-2Jets_EW_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+# files =  nanoGetSampleFiles(mcDirectory, "WZJJ_EWK")
+# samples['WZSJJ_EWK'] = {
+#     'name': files,
+#     'weight': mcCommonWeight,
+#     'EventsPerJob': 1000000,
+# #    'splitParts': 10,
+# #    'useParts'  : [0, 1, 2, 3],
+# }
+
+# addSubSampleWeights(samples, 'WZSJJ_EWK', "WZJJ_EWK", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+
+
+# files =  nanoGetSampleFiles(mcDirectory, "WZJJ_QCD") | \
+#          nanoGetSampleFiles(mcDirectory, "WZJJ_Interference")
+
+# samples['WZSJJ_QCD'] = {
+#     'name': files,
+#     'weight': mcCommonWeight,
+#     'EventsPerJob': 1000000,
+# #    'splitParts': 10,
+# #    'useParts'  : [0, 1, 2, 3],
+# }
+
+# addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_QCD", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+# addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_Interference", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+
+##################
+### Multiboson ###
+##################
+# WWW-4F_TuneCP5_13p6TeV_amcatnlo-pythia8
+# WWZ-4F_TuneCP5_13p6TeV_amcatnlo-pythia8
+# WZZ-5F_TuneCP5_13p6TeV_amcatnlo-pythia8
+# ZZZ-5F_TuneCP5_13p6TeV_amcatnlo-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WWW') | \
+        nanoGetSampleFiles(mcDirectory, 'WWZ') | \
+        nanoGetSampleFiles(mcDirectory, 'WZZ') | \
+        nanoGetSampleFiles(mcDirectory, 'ZZZ') | \
+        nanoGetSampleFiles(mcDirectory, 'WZG')
+
+
+samples['VVV'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+##################
+###    Higgs   ###
+##################
+# GluGluHto2Wto2L2Nu_Par-M-125_TuneCP5_13p6TeV_powheg-jhugen-pythia
+files = nanoGetSampleFiles(mcDirectory, 'GluGluHToWWTo2L2Nu_M125')
+
+samples['ggH_hww'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# VBFHto2Wto2L2Nu_Par-M-125_TuneCP5_13p6TeV_powheg-jhugen-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'VBFHToWWTo2L2Nu_M125')
+samples['qqH_hww'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+files = nanoGetSampleFiles(mcDirectory, 'VH-HToNon2B') | \
+        nanoGetSampleFiles(mcDirectory, 'ttHToNonbb_M125') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluHToZZTo4L_M125') | \
+        nanoGetSampleFiles(mcDirectory, 'VBFHToTauTau_M125') | \
+        nanoGetSampleFiles(mcDirectory, 'VBFHToZZTo4L_M125') | \
+        nanoGetSampleFiles(mcDirectory, 'GluGluHToTauTau_M125')
+
+samples['higgs'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# # OS WW
+files = nanoGetSampleFiles(mcDirectory, 'WpWmJJ_QCD_noTop') | \
+        nanoGetSampleFiles(mcDirectory, 'WpWmJJ_EWK_noTop')
+        
+samples['OSWW'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 1000000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+
+###########################################
+#############    SIGNALS  #################
+###########################################
+
+#   WpWpJJ_EWK-QCD_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW')
+samples['VBS_SSWW'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+
+# VBS-SSWW_PolarizationLL_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_LL')
+samples['VBS_SSWW_WWCM_LL'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# VBS-SSWW_PolarizationTL_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TL')
+samples['VBS_SSWW_WWCM_TL'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# VBS-SSWW_PolarizationTT_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW_WWCM_TT')
+samples['VBS_SSWW_WWCM_TT'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# WWto2L2Nu-2Jets_SS_noTop_EW_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_EWK_noTop')
+samples['WW_EWK'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# WWto2L2Nu-2Jets_SS_noTop_QCD_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_QCD_noTop')
+samples['WW_QCD'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+# SSWWJJ_Interference_TuneCP5_13p6TeV_madgraph-pythia8
+files = nanoGetSampleFiles(mcDirectory, 'WpWpJJ_Interference')
+samples['WW_Int'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'EventsPerJob': 500000,
+#    'splitParts': 10,
+#    'useParts'  : [0, 1, 2, 3],
+}
+
+###########
+## DATA ###
+############
+samples['DATA'] = {
+    'name': {},
+    'weight': 'LepWPCut*METFilter_DATA',
+    'weights': {},
+    'isData': ['all'],
+    'FilesPerJob': 100
+}
+
+for _, sd in DataRun:
+    for pd in DataSets:
+        datatag = pd + '_' + sd
+        if datatag.startswith('MuonEG'):
+            files = nanoGetSampleFiles(dataDirectoryMuonEG, datatag)
+        elif datatag.startswith('Muon'):
+            files = nanoGetSampleFiles(dataDirectoryMuon, datatag)
+        elif datatag.startswith('EGamma'):
+            files = nanoGetSampleFiles(dataDirectoryEGamma, datatag)
+        print(datatag)
+        samples['DATA']['name'].update(files)
+        samples['DATA']['weights'].update({
+            datatag: DataTrig[pd]
+        })
+
+# #############
+# ### Fakes ###
+# #############
+samples['Fake'] = {
+    'name': {},
+    'weight': 'METFilter_DATA*fakeW',
+    'weights': {},
+    'isData': ['all'],
+    'FilesPerJob': 100
+}
+
+for _, sd in DataRun:
+    for pd in DataSets:
+        datatag = pd + '_' + sd
+        if datatag.startswith('MuonEG'):
+            files = nanoGetSampleFiles(dataDirectoryMuonEG, datatag)
+        elif datatag.startswith('Muon'):
+            files = nanoGetSampleFiles(dataDirectoryMuon, datatag)
+        elif datatag.startswith('EGamma'):
+            files = nanoGetSampleFiles(dataDirectoryEGamma, datatag)
+        samples['Fake']['name'].update(files)
+        samples['Fake']['weights'].update({
+            datatag: DataTrig[pd]
+        })
+
