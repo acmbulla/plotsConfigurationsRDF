@@ -98,7 +98,7 @@ DataTrig = {
 # mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatch2l*SFweight'
 
 mcCommonWeightNoMatch = 'XSWeight*METFilter_Common*SFweight'
-mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatch2l*SFweight'
+mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatchN*SFweight'
 
 # mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * PromptGenLepMatch2l'
 # mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * METFilter_MC * PromptGenLepMatch2l'
