@@ -127,6 +127,37 @@ cuts['WW_SR'] = {
 # WZ Signal Region
 # 3 leptons, pT > 25/10 (Z pair) + pT > 20 (W lepton)
 # ------------------------------------------------
+# ------------------------------------------------
+# WZ Control Region, inclusive in jet multiplicity
+#
+# The WZ leg of the selection and nothing else: three leptons at 25/10/20 by
+# role, the Z pair in the mass window, mlll > 100, MET > 30. No jet
+# requirement, and therefore deliberately no mjj, no detajj and no zstar_max,
+# since all three need CleanJet[0] and CleanJet[1].
+#
+# The b veto is kept: it is well defined with zero jets (Sum(...) == 0 is
+# trivially true) and without it tZq and ttZ take over the three-lepton phase
+# space. Drop `&& bVeto` for the fully inclusive version.
+#
+# Purpose: a high-statistics WZ sample to pin the normalization. The VBS jet
+# requirement costs a large factor, so this region has many more events than
+# WZ_SR and measures data/MC for WZ with a far smaller statistical error --
+# which is the thing the signal regions cannot do.
+# ------------------------------------------------
+cuts['WZ_CR_incl'] = {
+    'expr': (
+        'nLepSel == 3'
+        ' && pt_Z1 > 25'
+        ' && pt_Z2 > 10'
+        ' && pt_W > 20'
+        ' && abs(mll_Z - 91.2) < 15'
+        ' && mlll > 100'
+        ' && PuppiMET_pt > 30'
+        ' && bVeto'
+        ' && (eee || eem || mme || mmm)'
+    ),
+}
+
 cuts['WZ_SR'] = {
     'expr': (
         'nLepSel == 3'
