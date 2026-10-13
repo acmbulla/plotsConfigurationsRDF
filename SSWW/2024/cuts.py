@@ -1,20 +1,37 @@
 # ------------------------------------------------
-# Supercut: loose preselection applied to all events
+# Supercut: loose preselection applied to all events. Leptons only.
 # - at least 2 leptons above 10 GeV (nLepSel), fewer than 5 in the collection
 #   (the >= 5 veto stays on the full collection: it stands in for the AN's veto
 #   on five or more *loose* leptons)
 # - leading lepton pT > 25; the subleading > 10 is implied by nLepSel > 1
-# - at least 2 jets with pT > 50 and |eta| < 5
+#
+# The jet requirement is NOT here any more: it moved into the regions, so that
+# a region can be defined inclusively in jet multiplicity (see WZ_CR_incl).
 # ------------------------------------------------
 supercut = (
     '  nLepSel > 1'
     ' && Lepton_pt.size() < 5'
     ' && (Lepton_pt.size() > 0 ? Lepton_pt[0] : -99) > 25'
+)
+
+# ------------------------------------------------
+# The two VBS tagging jets, previously part of the supercut.
+#
+# Every region that uses mjj, detajj or zstar_max has to keep this: all three
+# are built from CleanJet[0] and CleanJet[1] and are meaningless with fewer
+# than two jets. zstar_max in particular returns -1 when there are fewer, and
+# -1 < 1.0 is true, so a region that dropped the requirement but kept the cut
+# would silently accept every event with 0 or 1 jet.
+#
+# The size() check comes first and && short-circuits, so the indexing below is
+# safe without ternaries.
+# ------------------------------------------------
+vbsjets = (
     ' && CleanJet_pt.size() > 1'
-    ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 50'
-    ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 50'
-    ' && (CleanJet_pt.size() > 0 ? abs(CleanJet_eta[0]) : 99) < 5.0'
-    ' && (CleanJet_pt.size() > 1 ? abs(CleanJet_eta[1]) : 99) < 5.0'
+    ' && CleanJet_pt[0] > 50'
+    ' && CleanJet_pt[1] > 50'
+    ' && abs(CleanJet_eta[0]) < 5.0'
+    ' && abs(CleanJet_eta[1]) < 5.0'
 )
 
 
@@ -98,7 +115,7 @@ cuts['WW_SR'] = {
         ' && zstar_max < 0.75'
         ' && mjj > 500'
         ' && detajj > 2.5'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
     #     'mumu' : 'mumu',
@@ -124,7 +141,7 @@ cuts['WZ_SR'] = {
         ' && mjj > 500'
         ' && detajj > 2.5'
         ' && (eee || eem || mme || mmm)'
-    ),
+    ) + vbsjets,
     'categories': {
         'eee' : 'eee',   # Z->ee,   W->e
         'eem' : 'eem',   # Z->ee,   W->mu
@@ -147,7 +164,7 @@ cuts['nonprompt_CR'] = {
         ' && zstar_max < 0.75'
         ' && mjj > 500'
         ' && detajj > 2.5'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
     #     'mumu' : 'mumu',
@@ -172,7 +189,7 @@ cuts['WZb_CR'] = {
         ' && mjj > 500'
         ' && detajj > 2.5'
         ' && (eee || eem || mme || mmm)'
-    ),
+    ) + vbsjets,
     'categories': {
         'eee' : 'eee',   # Z->ee,   W->e
         'eem' : 'eem',   # Z->ee,   W->mu
@@ -194,7 +211,7 @@ cuts['WW_VR_bveto'] = {
         ' && bVeto'
         ' && zstar_max < 0.75'
         ' && mjj > 200 && mjj < 500'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
     #     'mumu' : 'mumu',
@@ -212,7 +229,7 @@ cuts['WW_VR_btag'] = {
         ' && bReq'
         ' && zstar_max < 0.75'
         ' && mjj > 200 && mjj < 500'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
     #     'mumu' : 'mumu',
@@ -236,7 +253,7 @@ cuts['WZ_VR_bveto'] = {
         ' && zstar_max < 1.0'
         ' && mjj > 200 && mjj < 500'
         ' && (eee || eem || mme || mmm)'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'eee' : 'eee',
     #     'eem' : 'eem',
@@ -258,7 +275,7 @@ cuts['WZ_VR_btag'] = {
         ' && zstar_max < 1.0'
         ' && mjj > 200 && mjj < 500'
         ' && (eee || eem || mme || mmm)'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'eee' : 'eee',
     #     'eem' : 'eem',
@@ -285,7 +302,7 @@ cuts['ZZ_VR'] = {
         ' && detajj > 2.5'
         ' && zstar_max < 0.75'
         ' && (eeee || eemm || mmmm)'
-    ),
+    ) + vbsjets,
     # 'categories': {
     #     'eeee' : 'eeee',
     #     'eemm' : 'eemm',
