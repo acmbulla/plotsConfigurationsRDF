@@ -1,9 +1,10 @@
 # ------------------------------------------------
-# TEMPORARY: every variable but 'events' is commented out.
-# The WZ_SR / WZb_CR yields are the only thing being checked right now, and a
-# counting histogram is all that needs; with the flavour split enabled in those
-# two regions the full 38-variable set would multiply the histograms for no
-# reason. Uncomment what you need when the yields are understood.
+# A reduced, diagnostic set is active; the rest stays commented out.
+#
+# Note that mjj, detajj and zstar_max are meaningless in WZ_CR_incl, which
+# requires no jets: computeZstar returns -1 and the mjj/detajj branches are
+# unset, so with fold = 3 those events pile into the first bin. Read them in
+# the jet-tagged regions only.
 # ------------------------------------------------
 
 
@@ -25,6 +26,27 @@ variables['events'] = {
     'fold' : 3
 }
 
+# nLepSel is what the selection counts (leptons above 10 GeV); nlep above is
+# the whole collection, which reaches down to ~3 GeV. Plotting both is the
+# direct handle on how many events carry a soft spurious lepton, in data and
+# in simulation.
+variables['nlepsel'] = {
+    'name' : 'nLepSel',
+    'range': (5, 0, 5),
+    'xaxis': 'N_{leptons} (p_{T} > 10 GeV)',
+    'fold' : 2
+}
+
+# NOT called 'njet': that name is already a branch in these nanoAODs, and
+# SafeDefine leaves an existing column alone, so variables['njet'] silently
+# histograms the branch instead of the expression it declares.
+variables['njet30'] = {
+    'name' : 'Sum(CleanJet_pt > 30)',
+    'range': (8, 0, 8),
+    'xaxis': 'N_{jets} (p_{T} > 30 GeV)',
+    'fold' : 2
+}
+
 # variables['njet'] = {
 #     'name' : 'Sum(CleanJet_pt > 30)',
 #     'range': (8, 0, 8),
@@ -32,43 +54,43 @@ variables['events'] = {
 #     'fold' : 2
 # }
 
-# variables['nlep'] = {
-#     'name' : 'Lepton_pt.size()',
-#     'range': (5, 0, 5),
-#     'xaxis': 'N_{leptons}',
-#     'fold' : 2
-# }
+variables['nlep'] = {
+    'name' : 'Lepton_pt.size()',
+    'range': (5, 0, 5),
+    'xaxis': 'N_{leptons}',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # Lepton kinematics
 # ------------------------------------------------
-# variables['ptl1'] = {
-#     'name' : 'Lepton_pt.size() > 0 ? Lepton_pt[0] : -9999.',
-#     'range': (10, 25, 225),
-#     'xaxis': 'p_{T}^{l1} [GeV]',
-#     'fold' : 2
-# }
+variables['ptl1'] = {
+    'name' : 'Lepton_pt.size() > 0 ? Lepton_pt[0] : -9999.',
+    'range': (10, 25, 225),
+    'xaxis': 'p_{T}^{l1} [GeV]',
+    'fold' : 2
+}
 
-# variables['ptl2'] = {
-#     'name' : 'Lepton_pt.size() > 1 ? Lepton_pt[1] : -9999.',
-#     'range': (10, 20, 120),
-#     'xaxis': 'p_{T}^{l2} [GeV]',
-#     'fold' : 2
-# }
+variables['ptl2'] = {
+    'name' : 'Lepton_pt.size() > 1 ? Lepton_pt[1] : -9999.',
+    'range': (10, 20, 120),
+    'xaxis': 'p_{T}^{l2} [GeV]',
+    'fold' : 2
+}
 
-# variables['etal1'] = {
-#     'name' : 'Lepton_pt.size() > 0 ? Lepton_eta[0] : -9999.',
-#     'range': (10, -2.5, 2.5),
-#     'xaxis': '#eta^{l1}',
-#     'fold' : 0
-# }
+variables['etal1'] = {
+    'name' : 'Lepton_pt.size() > 0 ? Lepton_eta[0] : -9999.',
+    'range': (10, -2.5, 2.5),
+    'xaxis': '#eta^{l1}',
+    'fold' : 0
+}
 
-# variables['etal2'] = {
-#     'name' : 'Lepton_pt.size() > 1 ? Lepton_eta[1] : -9999.',
-#     'range': (10, -2.5, 2.5),
-#     'xaxis': '#eta^{l2}',
-#     'fold' : 0
-# }
+variables['etal2'] = {
+    'name' : 'Lepton_pt.size() > 1 ? Lepton_eta[1] : -9999.',
+    'range': (10, -2.5, 2.5),
+    'xaxis': '#eta^{l2}',
+    'fold' : 0
+}
 
 # ------------------------------------------------
 # Dilepton system (WW)
@@ -97,12 +119,12 @@ variables['events'] = {
 # ------------------------------------------------
 # MET
 # ------------------------------------------------
-# variables['MET'] = {
-#     'name' : 'PuppiMET_pt',
-#     'range': (10, 30, 230),
-#     'xaxis': 'p_{T}^{miss} [GeV]',
-#     'fold' : 2
-# }
+variables['MET'] = {
+    'name' : 'PuppiMET_pt',
+    'range': (10, 30, 230),
+    'xaxis': 'p_{T}^{miss} [GeV]',
+    'fold' : 2
+}
 
 # variables['MET_phi'] = {
 #     'name' : 'PuppiMET_phi',
@@ -138,19 +160,19 @@ variables['events'] = {
 # ------------------------------------------------
 # Jet kinematics
 # ------------------------------------------------
-# variables['ptj1'] = {
-#     'name' : 'CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -9999.',
-#     'range': (10, 50, 350),
-#     'xaxis': 'p_{T}^{j1} [GeV]',
-#     'fold' : 2
-# }
+variables['ptj1'] = {
+    'name' : 'CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -9999.',
+    'range': (10, 50, 350),
+    'xaxis': 'p_{T}^{j1} [GeV]',
+    'fold' : 2
+}
 
-# variables['ptj2'] = {
-#     'name' : 'CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -9999.',
-#     'range': (10, 50, 250),
-#     'xaxis': 'p_{T}^{j2} [GeV]',
-#     'fold' : 2
-# }
+variables['ptj2'] = {
+    'name' : 'CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -9999.',
+    'range': (10, 50, 250),
+    'xaxis': 'p_{T}^{j2} [GeV]',
+    'fold' : 2
+}
 
 # variables['etaj1'] = {
 #     'name' : 'CleanJet_pt.size() > 0 ? CleanJet_eta[0] : -9999.',
@@ -169,12 +191,12 @@ variables['events'] = {
 # ------------------------------------------------
 # VBS dijet system
 # ------------------------------------------------
-# variables['mjj'] = {
-#     'name' : 'mjj',
-#     'range': ([500, 700, 1000, 1500, 3000]),
-#     'xaxis': 'm_{jj} [GeV]',
-#     'fold' : 2
-# }
+variables['mjj'] = {
+    'name' : 'mjj',
+    'range': ([500, 700, 1000, 1500, 3000]),
+    'xaxis': 'm_{jj} [GeV]',
+    'fold' : 2
+}
 
 # variables['mjj_incl'] = {
 #     'name' : 'mjj',
@@ -183,19 +205,19 @@ variables['events'] = {
 #     'fold' : 2
 # }
 
-# variables['detajj'] = {
-#     'name' : 'detajj',
-#     'range': (8, 2.5, 8.5),
-#     'xaxis': '#Delta#eta(j_{1}, j_{2})',
-#     'fold' : 2
-# }
+variables['detajj'] = {
+    'name' : 'detajj',
+    'range': (8, 2.5, 8.5),
+    'xaxis': '#Delta#eta(j_{1}, j_{2})',
+    'fold' : 2
+}
 
-# variables['zstar_max'] = {
-#     'name' : 'zstar_max',
-#     'range': (8, 0, 1.5),
-#     'xaxis': 'max(z*_{l})',
-#     'fold' : 2
-# }
+variables['zstar_max'] = {
+    'name' : 'zstar_max',
+    'range': (8, 0, 1.5),
+    'xaxis': 'max(z*_{l})',
+    'fold' : 2
+}
 
 # variables['Zepp_ll'] = {
 #     'name' : '0.5*abs((Lepton_eta[0] + Lepton_eta[1]) - (CleanJet_eta[0] + CleanJet_eta[1]))',
@@ -245,26 +267,26 @@ variables['events'] = {
 # ------------------------------------------------
 # WZ-specific variables
 # ------------------------------------------------
-# variables['mll_Z'] = {
-#     'name' : 'mll_Z',
-#     'range': (10, 61, 121),
-#     'xaxis': 'm_{ll}^{Z} [GeV]',
-#     'fold' : 0
-# }
+variables['mll_Z'] = {
+    'name' : 'mll_Z',
+    'range': (10, 61, 121),
+    'xaxis': 'm_{ll}^{Z} [GeV]',
+    'fold' : 0
+}
 
-# variables['mlll'] = {
-#     'name' : 'mlll',
-#     'range': (10, 100, 500),
-#     'xaxis': 'm_{lll} [GeV]',
-#     'fold' : 2
-# }
+variables['mlll'] = {
+    'name' : 'mlll',
+    'range': (10, 100, 500),
+    'xaxis': 'm_{lll} [GeV]',
+    'fold' : 2
+}
 
-# variables['pt_W'] = {
-#     'name' : 'pt_W',
-#     'range': (10, 20, 220),
-#     'xaxis': 'p_{T}^{l_{W}} [GeV]',
-#     'fold' : 2
-# }
+variables['pt_W'] = {
+    'name' : 'pt_W',
+    'range': (10, 20, 220),
+    'xaxis': 'p_{T}^{l_{W}} [GeV]',
+    'fold' : 2
+}
 
 # variables['proxyW_W'] = {
 #     'name' : 'proxyW_W',
