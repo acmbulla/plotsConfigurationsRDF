@@ -67,11 +67,14 @@ ROOT::RVec<float> computeWZvars(
     float ptZ1    = std::max(pt[idx_Z1], pt[idx_Z2]);
     float ptZ2    = std::min(pt[idx_Z1], pt[idx_Z2]);
 
-    // proxyW_W: transverse mass of W lepton + MET
-    TLorentzVector lW_4v, MET_4v;
-    lW_4v.SetPtEtaPhiM(pt[idx_W], eta[idx_W], phi[idx_W], lepton_mass(pdgId[idx_W]));
-    MET_4v.SetPtEtaPhiM(MET_pt, 0., MET_phi, 0.);
-    float proxyW_W = (float)(lW_4v + MET_4v).M();
+    // proxyW_W: transverse mass of the W lepton and the MET.
+    // Do not build this as (lW + MET).M() with the MET four-vector at eta = 0:
+    // that is an invariant mass and carries a spurious cosh(eta_W) in place of
+    // the 1, which inflates it by 1.31 in the median and by up to a factor 247.
+    // No phi wrapping is needed, cos() is periodic.
+    float dphi_W_MET = phi[idx_W] - MET_phi;
+    float proxyW_W   = std::sqrt(std::max(0.f,
+                           2.f * pt[idx_W] * MET_pt * (1.f - std::cos(dphi_W_MET))));
 
     return { mll_Z, mlll, (float)idx_W, category, pt[idx_W], ptZ1, ptZ2, proxyW_W };
 }
