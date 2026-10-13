@@ -361,9 +361,9 @@ btagging_SFs = {
 
 # Algorithm and WP selection
 bAlgo = 'UParTAK4B'
-WP    = 'medium'    # ['loose','medium','tight','xtight','xxtight']
+WP    = 'loose'     # ['loose','medium','tight','xtight','xxtight']
 
-WP_eval = 'M'# ['L', 'M', 'T', 'XT', 'XXT']
+WP_eval = 'L'# ['L', 'M', 'T', 'XT', 'XXT']
 tagger = 'UParTAK4'
 
 # Access information from dictionaries
