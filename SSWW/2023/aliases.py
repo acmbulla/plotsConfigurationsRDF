@@ -278,6 +278,21 @@ aliases['noJetInHorn'] = {
     'samples' : ALL
 }
 
+# The fake-rate reader guards on Lepton_pt.size() == nLeptons_, so it has to be
+# fed the selected leptons too. Fed the full collection while the regions pin
+# nLepSel, the instances stop being mutually exclusive: in a 2-lepton region an
+# event whose third lepton is below threshold has size() == 3, so the 3l
+# instance fires and looks the fake rate up below the lowest pT bin of the map,
+# which comes back NaN and poisons the whole histogram.
+for _c, _e in (
+        ('isTightMuon',     f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})'),
+        ('isTightElectron', f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})'),
+        ('muonIdx',         'ROOT::VecOps::RVec<int>(Lepton_muonIdx)')):
+    aliases['SelLep_' + _c] = {
+        'expr'   : f'Take({_e}, nLepSel)',
+        'samples': ['Fake'],
+    }
+
 for kind, label in [
     ('nominal',     ''),
     ('EleUp',       'EleUp'),
@@ -310,10 +325,10 @@ for kind, label in [
             # to exactly what operator() declares. nCleanJet is Int_t, which
             # already matches the int parameter; pt/eta are float and Lepton_pdgId
             # is int, as VBS_functions.cpp already relies on.
-            'variables'    : ['Lepton_pdgId', 'Lepton_pt', 'Lepton_eta',
-                              f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})',
-                              f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})',
-                              'ROOT::VecOps::RVec<int>(Lepton_muonIdx)',
+            'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
+                              'SelLep_isTightMuon',
+                              'SelLep_isTightElectron',
+                              'SelLep_muonIdx',
                               'CleanJet_pt', '(int)nCleanJet'],
             'samples'      : ['Fake'],
         }
