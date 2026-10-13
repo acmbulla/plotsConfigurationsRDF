@@ -1,14 +1,15 @@
 # ------------------------------------------------
 # Supercut: loose preselection applied to all events
-# - at least 2 leptons, fewer than 5
-# - leading lepton pT > 25, subleading > 10
+# - at least 2 leptons above 10 GeV (nLepSel), fewer than 5 in the collection
+#   (the >= 5 veto stays on the full collection: it stands in for the AN's veto
+#   on five or more *loose* leptons)
+# - leading lepton pT > 25; the subleading > 10 is implied by nLepSel > 1
 # - at least 2 jets with pT > 50 and |eta| < 5
 # ------------------------------------------------
 supercut = (
-    '  Lepton_pt.size() > 1'
+    '  nLepSel > 1'
     ' && Lepton_pt.size() < 5'
     ' && (Lepton_pt.size() > 0 ? Lepton_pt[0] : -99) > 25'
-    ' && (Lepton_pt.size() > 1 ? Lepton_pt[1] : -99) > 10'
     ' && CleanJet_pt.size() > 1'
     ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 50'
     ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 50'
@@ -23,7 +24,7 @@ supercut = (
 # ------------------------------------------------
 cuts['WW_SR'] = {
     'expr': (
-        'Lepton_pt.size() == 2'
+        'nLepSel == 2'
         ' && Lepton_pt[1] > 20'
         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'          # same-sign in base region
         ' && mll > 20'
@@ -46,7 +47,7 @@ cuts['WW_SR'] = {
 # ------------------------------------------------
 cuts['WZ_SR'] = {
     'expr': (
-        'Lepton_pt.size() == 3'
+        'nLepSel == 3'
         ' && pt_Z1 > 25'
         ' && pt_Z2 > 10'
         ' && pt_W > 20'
@@ -72,7 +73,7 @@ cuts['WZ_SR'] = {
 # ------------------------------------------------
 cuts['nonprompt_CR'] = {
     'expr': (
-        'Lepton_pt.size() == 2'
+        'nLepSel == 2'
         ' && Lepton_pt[1] > 20'
         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
@@ -94,7 +95,7 @@ cuts['nonprompt_CR'] = {
 # ------------------------------------------------
 cuts['WZb_CR'] = {
     'expr': (
-        'Lepton_pt.size() == 3'
+        'nLepSel == 3'
         ' && pt_Z1 > 25'
         ' && pt_Z2 > 10'
         ' && pt_W > 20'
@@ -120,7 +121,7 @@ cuts['WZb_CR'] = {
 # ------------------------------------------------
 cuts['WW_VR_bveto'] = {
     'expr': (
-        'Lepton_pt.size() == 2'
+        'nLepSel == 2'
         ' && Lepton_pt[1] > 20'
         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
@@ -138,7 +139,7 @@ cuts['WW_VR_bveto'] = {
 
 cuts['WW_VR_btag'] = {
     'expr': (
-        'Lepton_pt.size() == 2'
+        'nLepSel == 2'
         ' && Lepton_pt[1] > 20'
         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
         ' && mll > 20'
@@ -159,7 +160,7 @@ cuts['WW_VR_btag'] = {
 # ------------------------------------------------
 cuts['WZ_VR_bveto'] = {
     'expr': (
-        'Lepton_pt.size() == 3'
+        'nLepSel == 3'
         ' && pt_Z1 > 25'
         ' && pt_Z2 > 10'
         ' && pt_W > 20'
@@ -181,7 +182,7 @@ cuts['WZ_VR_bveto'] = {
 
 cuts['WZ_VR_btag'] = {
     'expr': (
-        'Lepton_pt.size() == 3'
+        'nLepSel == 3'
         ' && pt_Z1 > 25'
         ' && pt_Z2 > 10'
         ' && pt_W > 20'
@@ -203,12 +204,14 @@ cuts['WZ_VR_btag'] = {
 
 # ------------------------------------------------
 # ZZ Validation Region (4 leptons)
-# pT > 25/20, both SFOS pairs in Z window
-# mjj > 500, detajj > 2.5, no MET cut, no bveto
+# AN Table 14 asks pT > 25/20/10/10. The 25 and the 20 are explicit below; the
+# two 10s need no cut, because nLepSel == 4 already means four leptons above
+# 10 GeV (and the supercut caps the collection at 4, so there are no others).
+# Both SFOS pairs in the Z window, mjj > 500, detajj > 2.5, no MET cut, no bveto
 # ------------------------------------------------
 cuts['ZZ_VR'] = {
     'expr': (
-        'Lepton_pt.size() == 4'
+        'nLepSel == 4'
         ' && pt_4l_1 > 25'
         ' && pt_4l_2 > 20'
         ' && abs(mll_Z1 - 91.2) < 15'

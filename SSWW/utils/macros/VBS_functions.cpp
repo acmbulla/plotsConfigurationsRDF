@@ -18,10 +18,10 @@ inline float lepton_mass(int pdgId) {
 //          [4] pt_W   [5] pt_Z1 [6] pt_Z2  [7] proxyW_W
 //
 ROOT::RVec<float> computeWZvars(
-    ROOT::RVec<float>& pt,
-    ROOT::RVec<float>& eta,
-    ROOT::RVec<float>& phi,
-    ROOT::RVec<int>&   pdgId,
+    const ROOT::RVec<float>& pt,
+    const ROOT::RVec<float>& eta,
+    const ROOT::RVec<float>& phi,
+    const ROOT::RVec<int>&   pdgId,
     float              MET_pt,
     float              MET_phi
 ) {
@@ -86,10 +86,10 @@ ROOT::RVec<float> computeWZvars(
 //          [4] pt_4l_1 [5] pt_4l_2
 //
 ROOT::RVec<float> computeZZvars(
-    ROOT::RVec<float>& pt,
-    ROOT::RVec<float>& eta,
-    ROOT::RVec<float>& phi,
-    ROOT::RVec<int>&   pdgId
+    const ROOT::RVec<float>& pt,
+    const ROOT::RVec<float>& eta,
+    const ROOT::RVec<float>& phi,
+    const ROOT::RVec<int>&   pdgId
 ) {
     if ((int)pt.size() < 4) return {-1., -1., -1., -1., -1., -1.};
 
@@ -142,8 +142,8 @@ ROOT::RVec<float> computeZZvars(
 // Returns max(z*_l) over all leptons
 //
 float computeZstar(
-    ROOT::RVec<float>& lep_eta,
-    ROOT::RVec<float>& jet_eta
+    const ROOT::RVec<float>& lep_eta,
+    const ROOT::RVec<float>& jet_eta
 ) {
     if ((int)jet_eta.size() < 2) return -1.;
     float eta_avg   = (jet_eta[0] + jet_eta[1]) / 2.0;

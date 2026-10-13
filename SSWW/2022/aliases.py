@@ -23,20 +23,52 @@ muWP  = 'cut_TightID_pfIsoTight_HWW_tthmva_67'
 
 Tag = 'ele_'+eleWP+'_mu_'+muWP
 
+# -------- lepton multiplicity, counted above threshold
+#
+# AN2025_031 Sec. 4 counts leptons with pT > 10 GeV ("two, three, or four
+# isolated charged leptons with pT > 10 GeV [...] Candidate events with five or
+# more charged leptons satisfying the loose identification criteria are
+# rejected"), while Lepton_pt.size() counts the whole collection, which reaches
+# down to ~3 GeV. An event with three good leptons plus one soft spurious one is
+# a 3-lepton event, not a 4-lepton one, and must not migrate out of the WZ
+# regions.
+#
+# This works -- and switching the weights on it is safe -- only because the
+# Lepton collection is pT-ordered, so the leptons above threshold are always the
+# *first* nLepSel ones (verified: 0 violations in 77k events, thresholds 10, 15
+# and 20 GeV). That prefix is exactly what LepCut{N}l, LepSF{N}l, SFweight{N}l
+# and Lepton_promptgenmatched[0..N-1] refer to, so the tight requirement, the
+# lepton SF, the global SF and the prompt gen-matching all keep pointing at the
+# selected leptons and at nothing else.
+ptMinLep = 10.
+
+aliases['nLepSel'] = {
+    'expr': 'Sum(Lepton_pt > %ff)' % ptMinLep,
+    'samples': ALL
+}
+
+# the selected leptons themselves, for the helpers that take the collection.
+# Take(v, n) with n > 0 returns the first n entries, i.e. the prefix above.
+for _c in ('pt', 'eta', 'phi', 'pdgId'):
+    aliases['SelLep_' + _c] = {
+        'expr': 'Take(Lepton_%s, nLepSel)' % _c,
+        'samples': ALL
+    }
+
 # -------- lepton WP, per lepton multiplicity
 #
-# Every region pins Lepton_pt.size() with '==' (see cuts.py):
+# Every region pins nLepSel with '==' (see cuts.py):
 #     WW_SR, nonprompt_CR, WW_VR_bveto, WW_VR_btag   -> 2
 #     WZ_SR, WZb_CR, WZ_VR_bveto, WZ_VR_btag         -> 3
 #     ZZ_VR                                          -> 4
-# so switching on that size picks exactly the multiplicity the region requires.
+# so switching on that count picks exactly the multiplicity the region requires.
 # A region written with '>=' instead of '==' would silently get the weight of
 # whichever multiplicity the event happens to have.
 #
 # These four always have to agree on N -- the tight requirement, the lepton SF,
 # the global SF and the prompt gen-matching. The nanoAOD provides LepCut{N}l,
 # LepSF{N}l, SFweight{N}l and Lepton_promptgenmatched for N = 2, 3, 4.
-nlep = 'Lepton_pt.size()'
+nlep = 'nLepSel'
 
 for N in (2, 3, 4):
     aliases['LepWPCut%dl' % N] = {
@@ -105,7 +137,7 @@ aliases['emu'] = {
 # ------------------------------------------------
 aliases['zstar_max'] = {
     'function' : 'computeZstar',
-    'variables': ['Lepton_eta', 'CleanJet_eta'],
+    'variables': ['SelLep_eta', 'CleanJet_eta'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
@@ -119,7 +151,7 @@ aliases['zstar_max'] = {
 # ------------------------------------------------
 aliases['WZ_vars'] = {
     'function' : 'computeWZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId',
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId',
                   'PuppiMET_pt', 'PuppiMET_phi'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
@@ -148,7 +180,7 @@ aliases['mmm'] = { 'expr': 'WZ_flav == 1313', 'samples': ALL }  # Z->mumu, W->mu
 # ------------------------------------------------
 aliases['ZZ_vars'] = {
     'function' : 'computeZZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId'],
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
