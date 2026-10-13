@@ -173,12 +173,12 @@ cuts['WZ_SR'] = {
         ' && detajj > 2.5'
         ' && (eee || eem || mme || mmm)'
     ) + vbsjets,
-    'categories': {
-        'eee' : 'eee',   # Z->ee,   W->e
-        'eem' : 'eem',   # Z->ee,   W->mu
-        'mme' : 'mme',   # Z->mumu, W->e
-        'mmm' : 'mmm',   # Z->mumu, W->mu
-    }
+    # 'categories': {
+    #     'eee' : 'eee',
+    #     'eem' : 'eem',
+    #     'mme' : 'mme',
+    #     'mmm' : 'mmm',
+    # }
 }
 
 # ------------------------------------------------
@@ -221,12 +221,12 @@ cuts['WZb_CR'] = {
         ' && detajj > 2.5'
         ' && (eee || eem || mme || mmm)'
     ) + vbsjets,
-    'categories': {
-        'eee' : 'eee',   # Z->ee,   W->e
-        'eem' : 'eem',   # Z->ee,   W->mu
-        'mme' : 'mme',   # Z->mumu, W->e
-        'mmm' : 'mmm',   # Z->mumu, W->mu
-    }
+    # 'categories': {
+    #     'eee' : 'eee',
+    #     'eem' : 'eem',
+    #     'mme' : 'mme',
+    #     'mmm' : 'mmm',
+    # }
 }
 
 # ------------------------------------------------
