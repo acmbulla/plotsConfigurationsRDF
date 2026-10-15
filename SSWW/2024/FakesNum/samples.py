@@ -5,13 +5,72 @@ searchFiles = SearchFiles()
 useXROOTD = False
 redirector = 'root://eoscms.cern.ch/'
 
+# ---------------------------------------------------------------------------
+# Productions. BOTH OF THESE HAVE TO BE PRODUCED -- neither exists yet.
+#
+# The analysis productions cannot be used for this measurement:
+#
+#   MCl2loose2024v15__MCCorr2024v15__JERFrom23BPix__l2tight ends with the
+#   l2tight step (mkShapesRDF L2TightSelection.py:33-35), a filter requiring
+#   both Lepton_[0] and Lepton_[1] to pass a tight WP. The loose denominator
+#   does not exist in that MC, so the denominator cannot be prompt-subtracted.
+#
+#   The existing l1loose MC chains all go through fakeSel, which is
+#   Filter("MET_pt < 20 || PuppiMET_pt < 20") (FakeSel.py:14) and runs on MC
+#   only (do4MC True, do4Data False), so data and MC would not share it.
+#
+# What to request, both in mkShapesRDF Steps_cfg.py and as a production:
+#
+#   MC   'MCl1loose2024v15__MCCorr2024v15__JERFrom23BPix'
+#        = the chain at Steps_cfg.py:449 with the "fakeSel" subTarget removed.
+#   DATA 'DATAl1loose2024v15'
+#        = the entry at Steps_cfg.py:1449, edited in place to carry the
+#          subTargets of :1468 minus "fakeSel": jetIDMaker,
+#          JES_modules_reducedv15_DATA and leptonScale_data added, in that
+#          order, before jetSelMask and l2Kin respectively.
+#
+# Both live in Steps_cfg.py, which belongs to mkShapesRDF, not here.
+#
+# Why not the two existing chains as they are:
+#
+#   fakeSel runs on data as well as MC. The do4MC / do4Data flags in
+#   Steps_cfg.py are inert -- they appear nowhere else in mkShapesRDF, and
+#   addDeclareLines (processor.py:156-158) emits every subTarget
+#   unconditionally -- so '...__fakeSel' would apply
+#   Filter("MET_pt < 20 || PuppiMET_pt < 20") (FakeSel.py:14) to both.
+#
+#   'DATAl1loose2024v15' as it stood had no leptonScale_data, while the MC
+#   chain has leptonScale_mc, and both analysis productions have their
+#   respective one. leptonScale_* is LeptonScaleSmearing, which corrects
+#   Lepton_pt -- the axis the map is binned in. Measuring f(pT, eta) on
+#   uncalibrated data and applying it to events with calibrated Lepton_pt
+#   evaluates the map at the wrong pT. That, and not the jets, is what the
+#   missing block costs: nothing in cuts.py cuts on a jet, the jet variables
+#   are dumped only, so the JEC and the JER are along for the ride. They are
+#   free anyway -- the chains end with finalSnapshot_{MC,DATA}, which have
+#   includeVariations=False, so no variation tree is written.
+#
+# Both chains use the same trigData step, and TrigMaker neither filters nor
+# looks at the lepton multiplicity (TrigMaker.py:385-404), so the trigger
+# decisions -- dblMu / dblEl / ElMu included -- are identical to the l2loose
+# production's.
+#
+# l1loose is a superset of l2loose in multiplicity -- its chain selection is
+# "((nElectron+nMuon)>0)" against "((nElectron+nMuon)>1)" -- so one pair of
+# productions covers both the 1-lepton and the 2-lepton branch of cuts.py.
+# Only VV, W+jets, DY and top are needed on the MC side.
+# ---------------------------------------------------------------------------
 mcProduction       = 'Summer24_150x_nAODv15_Full2024v15'
-mcSteps            = 'MCl2loose2024v15__MCCorr2024v15__JERFrom23BPix__l2tight'
-dataRecoMuon       = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_Muon'
+mcSteps            = 'MCl1loose2024v15__MCCorr2024v15__JERFrom23BPix'
 dataRecoEGamma     = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_EGamma'
+dataRecoMuon       = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_Muon'
 dataRecoMuonEG     = 'Run2024_ReRecoCDE_PromptFGHI_nAODv15_Full2024v15_MuonEG'
-dataSteps          = 'DATAl2loose2024v15__l2loose'
-fakeSteps          = 'DATAl2loose2024v15__l2loose'
+dataSteps          = 'DATAl1loose2024v15'
+
+# The analysis productions, for reference. Do not point the measurement at
+# these: see above.
+# mcSteps   = 'MCl2loose2024v15__MCCorr2024v15__JERFrom23BPix__l2tight'
+# dataSteps = 'DATAl2loose2024v15__l2loose'
 
 ##############################################
 ###### Tree base directory for the site ######
@@ -30,11 +89,8 @@ def makeMCDirectory(var=""):
 
 mcDirectory   = makeMCDirectory()
 print(mcDirectory)
-fakeDirectoryMuon = os.path.join(treeBaseDir, dataRecoMuon, fakeSteps)
 dataDirectoryMuon = os.path.join(treeBaseDir, dataRecoMuon, dataSteps)
-fakeDirectoryEGamma = os.path.join(treeBaseDir, dataRecoEGamma, fakeSteps)
 dataDirectoryEGamma = os.path.join(treeBaseDir, dataRecoEGamma, dataSteps)
-fakeDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, fakeSteps)
 dataDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, dataSteps)
 
 
@@ -93,9 +149,43 @@ DataTrig = {
 # mcCommonWeightNoMatch = 'XSWeight*METFilter_Common*SFweight'
 # mcCommonWeight        = 'XSWeight*METFilter_Common*PromptGenLepMatch2l*SFweight'
 
-
-mcCommonWeight =        'XSWeight * SFweight2l * LepWPCut * LepWPSF * PromptGenLepMatch2l'
-mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
+# ---------------------------------------------------------------------------
+# Measurement weights -- deliberately NOT the analysis ones.
+#
+# The analysis uses SFweight = SFweightNl * LepWPCutN * LepWPSFN * btagSF*,
+# which is wrong here on two counts:
+#
+#   1. LepWPCutN is the *tight* requirement. The fake rate is a ratio of tight
+#      over loose, so the denominator must keep the loose leptons that fail
+#      tight. Folding the tight cut into the weight would make numerator and
+#      denominator identical and the ratio exactly 1.
+#   2. SFweightNl / LepWPSFN / LepSF{N}l exist for N = 2, 3, 4 only. The
+#      measurement region has one lepton, so every term of
+#      '(nLepSel == N) * ...' is false and the whole weight collapses to 0.
+#      There is no SFweight1l in the nanoAOD to switch to.
+#
+#   3. No PromptGenLepMatch either, and this one is not an omission. The
+#      nanoAOD flag is an AND over the event: PromptGenLepMatch{N}l is true
+#      only if *all* N selected leptons are prompt. The subtraction here is
+#      per lepton -- in a same-sign pair made of one prompt lepton and one
+#      fake, lepton 0 belongs in the prompt term and lepton 1 does not -- so
+#      an event-level AND would give that event weight 0 and under-subtract
+#      exactly the configuration that dominates. The per-lepton flag
+#      SelLep_promptgenmatched[i] is in the snapshot and is applied inside the
+#      probe loop in plotFake.py, where it can distinguish the two legs.
+#      (PromptGenLepMatch1l does not exist in the nanoAOD in any case: like
+#      LepCut{N}l and SFweight{N}l it is defined for N = 2, 3, 4 only.)
+#
+# What is left is the event-level normalisation alone. The tight-lepton scale
+# factor is not applied to either term: it is a tight-lepton efficiency
+# correction, it does not describe a loose lepton, and it largely cancels in
+# the ratio.
+#
+# The two names are therefore the same expression. Both are kept because the
+# sample definitions below use each of them, and keeping them distinct leaves
+# the Gen_ZGstar_mass stitching untouched.
+mcCommonWeightNoMatch = 'XSWeight*METFilter_Common'
+mcCommonWeight        = 'XSWeight*METFilter_Common'
 
 # mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * PromptGenLepMatch2l'
 # mcCommonWeight = 'XSWeight * SFweight2l * LepWPCut * LepWPSF * METFilter_MC * PromptGenLepMatch2l'
@@ -104,244 +194,136 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 
 
 
+# ===========================================================================
+# MC: only what the prompt subtraction needs.
+#
+# This is deliberately a short list. The MC enters the measurement in one way
+# only -- as the prompt term that is subtracted from data, per lepton, keyed on
+# SelLep_promptgenmatched[i] at fill time. So the processes that belong here are
+# the ones that put a *prompt* lepton in the measurement region, not the ones
+# that produce fakes: a fake is what is being measured, and it comes from data.
+#
+# Everything the analysis config carries and this one does not -- Higgs, ggWW,
+# VVV, tVx, Wg/Zg, the whole VBS signal -- is either negligible as a prompt
+# source or, for 37 of the 77 datasets the analysis samples.py asks for, not in
+# the Summer24_150x_nAODv15 production at all (VBS and the VBS-shaped VV like
+# WZJJ_EWK and ZZJJTo4L_*, ggZZ, and the Wg/Zg pT-binned names, which differ in
+# the production).
+# ===========================================================================
 
-# ##########
-# ### DY ###
-# ##########
-# # DYto2E-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# # DYto2Mu-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# # DYto2Tau-2Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# # DYto2E_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
-# # DYto2Mu_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
-# # DYto2Tau_Bin-MLL-10to50_TuneCP5_13p6TeV_powheg-pythia8
+##########
+### DY ###
+##########
+# Both the prompt term in the FR region and the DY region itself, where the
+# prompt rate is measured. MLL-10to50 is kept: the DY region reaches below the
+# peak and the FR region only cuts mll > 12.
 
-# files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-10to50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-10to50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-10to50')
-# samples['DY'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 240000,
-# }
+files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-10to50')
+samples['DY'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
 
 
-# ############
-# ### Top   ##
-# ############
-# # TTto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
-# # TbarWplusto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
-# # TWminusto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
-# # TBbarQtoLNu-t-channel-4FS_TuneCP5_13p6TeV_powheg-madspin-pythia8
-# # TbarBQtoLNu-t-channel-4FS_TuneCP5_13p6TeV_powheg-madspin-pythia8
-# # TBbartoLNu-s-channel_TuneCP5_13p6TeV_powheg-pythia8
-# # TbarBtoLNu-s-channel_TuneCP5_13p6TeV_powheg-pythia8
+##############
+### W+jets ###
+##############
+# The dominant prompt contamination, and the one the analysis config does not
+# carry at all (there W+jets is a fake, handled by the data-driven fakeW). Here
+# it is the opposite: the lepton from the W is prompt and passes tight with high
+# efficiency, so leaving it in the denominator biases f upward.
+#
+# amcatnloFXFX with up to 2 jets in the matrix element: inclusive in jet
+# multiplicity, no generator cut. Not the WtoLNu-4Jets_*_HT-* MLM series, whose
+# lowest bin starts at HT 40 and so leaves a hole in a region that requires no
+# jet. The two series are alternatives, never summed.
 
-# files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
-#         nanoGetSampleFiles(mcDirectory, 'TbarWplusto2L2Nu') | \
-#         nanoGetSampleFiles(mcDirectory, 'TWminusto2L2Nu') | \
-#         nanoGetSampleFiles(mcDirectory, 'ST_t-channel_top') | \
-#         nanoGetSampleFiles(mcDirectory, 'ST_t-channel_antitop') | \
-#         nanoGetSampleFiles(mcDirectory, 'ST_s-channel_plus') | \
-#         nanoGetSampleFiles(mcDirectory, 'ST_s-channel_minus')
-# samples['top'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 240000,
-# }
-# addSubSampleWeights (samples, 'top', 'TTTo2L2Nu', 'Top_pTrw')
+files = nanoGetSampleFiles(mcDirectory, 'WToENu-2Jet') | \
+        nanoGetSampleFiles(mcDirectory, 'WToMuNu-2Jet') | \
+        nanoGetSampleFiles(mcDirectory, 'WToTauNu-2Jet')
+samples['Wjets'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
 
-# ##########################################
-# ## WW QCD and gluon-induced background ###
-# ##########################################
 
-# # GluGluWWto2E2Nu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoENuMuNu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoENuTauNu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoMuNuENu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWto2Mu2Nu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoMuNuTauNu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoTauNuENu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWtoTauNuMuNu_TuneCP5_13p6TeV_mcfm-pythia8
-# # GluGluWWto2Tau2Nu_TuneCP5_13p6TeV_mcfm-pythia8
+############
+### Top  ###
+############
+# TTToSemiLeptonic matters more here than the dileptonic one: one prompt lepton
+# plus jets is exactly the topology of the QCD-enriched region. s-channel single
+# top is dropped as negligible.
 
-# files = nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuENu') | \
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuMuNu') | \
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoENuTauNu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuENu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuMuNu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoMuNuTauNu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuENu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuMuNu') |	\
-#     nanoGetSampleFiles(mcDirectory, 'GluGlutoContintoWWtoTauNuTauNu')
-# samples['ggWW'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 240000,
-# }
+files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'TTToSemiLeptonic') | \
+        nanoGetSampleFiles(mcDirectory, 'TbarWplusto2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'TWminusto2L2Nu') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_t-channel_top') | \
+        nanoGetSampleFiles(mcDirectory, 'ST_t-channel_antitop')
+samples['top'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
+addSubSampleWeights (samples, 'top', 'TTTo2L2Nu', 'Top_pTrw')
 
-# ## TODO: add QCD WW once ready -> just post process existing NanoAOD
 
-# ##########
-# ### VZ ###
-# ##########
-# # WZto3LNu_TuneCP5_13p6TeV_powheg-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'WZTo3LNu')
-# samples['WZ'] = {
-#     'name': files,
-#     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-#         'MaxEventsPerJob': 500000,
-# }
+###########
+### WZ  ###
+###########
+# The irreducible prompt background of the same-sign branch: WZ really does
+# give prompt same-sign pairs.
 
-# # ZZ_TuneCP5_13p6TeV_pythia8/
-# files = nanoGetSampleFiles(mcDirectory, 'ZZ')
-# samples['ZZ'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }    
+files = nanoGetSampleFiles(mcDirectory, 'WZTo3LNu')
+samples['WZ'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
 
-# ##################
-# ### Vg/VgS/VZS ###
-# ##################
-# # DYGto2LG-1Jets_Bin-MLL-4to50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# # DYGto2LG-1Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_Bin-MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_Bin-MLL-4to50')    
-# samples['Zg'] = {
-#     'name': files,
-#     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-#         'MaxEventsPerJob': 500000,
-# }
 
-# # WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J')
-# samples['Wg'] = {
-#     'name': files,
-#     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-#         'MaxEventsPerJob': 500000,
-# }
+###########
+### ZZ  ###
+###########
+files = nanoGetSampleFiles(mcDirectory, 'ZZTo4L') | \
+        nanoGetSampleFiles(mcDirectory, 'ZZTo2L2Nu')
+samples['ZZ'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
 
-# # DYGto2LG-1Jets_Bin-MLL-4to50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# # DYGto2LG-1Jets_Bin-MLL-50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_Bin-MLL-4to50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYGto2LG-1Jets_Bin-MLL-50')
-# samples['ZgS'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
-# addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_Bin-MLL-4to50", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
-# addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_Bin-MLL-50", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
 
-# # WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
-# files =  nanoGetSampleFiles(mcDirectory, 'WGtoLNuG-1J')      
-# samples['WgS'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
-# addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
+###########
+### WW  ###
+###########
+# Opposite-sign prompt: it matters in the DY region, and in ee it leaks into
+# the same-sign branch through charge mis-identification.
 
-# # WZto3LNu_TuneCP5_13p6TeV_powheg-pythia8
-# files =  nanoGetSampleFiles(mcDirectory, "WZTo3LNu") 
-# samples['WZS'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
-# addSubSampleWeights(samples, 'WZS', "WZTo3LNu", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+files = nanoGetSampleFiles(mcDirectory, 'WWTo2L2Nu')
+samples['WW'] = {
+    'name': files,
+    'weight': mcCommonWeight,
+    'MaxEventsPerJob': 2000000,
+}
 
-# ##################
-# ### Multiboson ###
-# ##################
-# # WWW-4F_TuneCP5_13p6TeV_amcatnlo-pythia8
-# # WWZ-4F_TuneCP5_13p6TeV_amcatnlo-pythia8
-# # WZZ-5F_TuneCP5_13p6TeV_amcatnlo-pythia8
-# # ZZZ-5F_TuneCP5_13p6TeV_amcatnlo-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'WWW') | \
-#         nanoGetSampleFiles(mcDirectory, 'WWZ') | \
-#         nanoGetSampleFiles(mcDirectory, 'WZZ') | \
-#         nanoGetSampleFiles(mcDirectory, 'ZZZ')  
-# samples['VVV'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
 
-# ##################
-# ###    Higgs   ###
-# ##################
-# # GluGluHto2Wto2L2Nu_Par-M-125_TuneCP5_13p6TeV_powheg-jhugen-pythia
-# files = nanoGetSampleFiles(mcDirectory, 'GluGluHToWWTo2L2Nu_M125')
-# samples['ggH_hww'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
 
-# # VBFHto2Wto2L2Nu_Par-M-125_TuneCP5_13p6TeV_powheg-jhugen-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'VBFHToWWTo2L2Nu_M125')
-# samples['qqH_hww'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
-
-# #TODO: add VH and ttH
-
-# ###########################################
-# #############    SIGNALS  #################
-# ###########################################
-
-# ####################
-# ### WW inclusive ###
-# ####################
-# #TODO: Change for EWK Madgraph samples when produced  
-# #   WWto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8
-# files = nanoGetSampleFiles(mcDirectory, 'WWTo2L2Nu')
-# samples['WW'] = {
-#     'name': files,
-#     'weight': mcCommonWeight,
-#         'MaxEventsPerJob': 500000,
-# }
-
-# #TODO: add polarized
-
-# ###########
-# ## DATA ###
-# ############
-# samples['DATA'] = {
-#     'name': {},
-#     'weight': 'LepWPCut*METFilter_DATA',
-#     'weights': {},
-#     'isData': ['all'],
-#     'FilesPerJob': 100
-# }
-
-# for _, sd in DataRun:
-#     for pd in DataSets:
-#         datatag = pd + '_' + sd
-#         if datatag.startswith('MuonEG'):
-#             files = nanoGetSampleFiles(dataDirectoryMuonEG, datatag)
-#         elif datatag.startswith('Muon'):
-#             files = nanoGetSampleFiles(dataDirectoryMuon, datatag)
-#         elif datatag.startswith('EGamma'):
-#             files = nanoGetSampleFiles(dataDirectoryEGamma, datatag)
-#         print(datatag)
-#         samples['DATA']['name'].update(files)
-#         samples['DATA']['weights'].update({
-#             datatag: DataTrig[pd]
-#         })
-
-# #############
-# ### Fakes ###
-# #############
-samples['Fake'] = {
+###########
+## DATA ###
+############
+samples['DATA'] = {
     'name': {},
-    'weight': 'METFilter_DATA*fakeW',
+    # no LepWPCut: same reason as mcCommonWeight above -- it is the tight
+    # requirement, and the loose denominator has to survive it.
+    'weight': 'METFilter_DATA',
     'weights': {},
     'isData': ['all'],
     'FilesPerJob': 100
@@ -351,93 +333,20 @@ for _, sd in DataRun:
     for pd in DataSets:
         datatag = pd + '_' + sd
         if datatag.startswith('MuonEG'):
-            files = nanoGetSampleFiles(fakeDirectoryMuonEG, datatag)
+            files = nanoGetSampleFiles(dataDirectoryMuonEG, datatag)
         elif datatag.startswith('Muon'):
-            files = nanoGetSampleFiles(fakeDirectoryMuon, datatag)
+            files = nanoGetSampleFiles(dataDirectoryMuon, datatag)
         elif datatag.startswith('EGamma'):
-            files = nanoGetSampleFiles(fakeDirectoryEGamma, datatag)
-        samples['Fake']['name'].update(files)
-        samples['Fake']['weights'].update({
+            files = nanoGetSampleFiles(dataDirectoryEGamma, datatag)
+        print(datatag)
+        samples['DATA']['name'].update(files)
+        samples['DATA']['weights'].update({
             datatag: DataTrig[pd]
         })
 
-
-
-
-
-
-
-
-
-
-
-
-# files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-10to50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-10to50') | \
-#         nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-10to50')
-
-
-
-# DataRun = [
-#     ['C','Run2024C-ReReco-v1'],
-#     ['D','Run2024D-ReReco-v1'],
-#     ['E','Run2024E-ReReco-v1'],
-#     ['F','Run2024F-Prompt-v1'],
-#     ['G','Run2024G-Prompt-v1'],
-#     ['H','Run2024H-Prompt-v1'],
-#     ['I','Run2024I-Prompt-v1'],
-# ]
-
-
-# DataSets = [
-#   'MuonEG',
-#   'Muon0',
-#   'Muon1',
-#   'EGamma0',
-#   'EGamma1'
-#   ]
-
-# DataTrig = {
-#     'MuonEG'  : 'Trigger_ElMu' ,
-#     'Muon0'   : '!Trigger_ElMu && (Trigger_sngMu || Trigger_dblMu)',
-#     'Muon1'   : '!Trigger_ElMu && (Trigger_sngMu || Trigger_dblMu)',
-#     'EGamma0' : '!Trigger_ElMu && !Trigger_sngMu && !Trigger_dblMu && (Trigger_sngEl || Trigger_dblEl)',
-#     'EGamma1' : '!Trigger_ElMu && !Trigger_sngMu && !Trigger_dblMu && (Trigger_sngEl || Trigger_dblEl)',
-# }
-
-
-
-# samples['DATA'] = {
-#   'name': {},
-#   'weight': 'LepWPCut',
-#   # 'weight': 'LepWPCut*METFilter_DATA',
-#   'weights': {},
-#   'isData': ['all'],
-#   'FilesPerJob': 100
-# }
-
-# for era, era_name in DataRun:
-#   for pd in DataSets:
-#     datatag = pd + '_' + era_name
-
-#     # get the files
-#     if datatag.startswith('MuonEG'):
-#         files = nanoGetSampleFiles(dataDirectoryMuonEG, datatag)
-#     elif datatag.startswith('Muon'):
-#         files = nanoGetSampleFiles(dataDirectoryMuon, datatag)
-#     elif datatag.startswith('EGamma'):
-#         files = nanoGetSampleFiles(dataDirectoryEGamma, datatag)
-
-#     samples['DATA']['name'].update(files)
-
-#     # add the weight that is different pd by pd, to take into account orthogonality of triggers
-#     samples['DATA']['weights'].update( {datatag : DataTrig[pd] })
-
-
-#
-# Useful later on, like aliases.py, nuisances.py, ...
-#
-
+# #############
+# ### Fakes ###
+# #############
+# No Fake sample here. It is weighted by fakeW, i.e. by the fake rate this
+# configuration exists to measure, so including it would be circular. The
+# closure test that *applies* the measured rate belongs in the analysis config.
