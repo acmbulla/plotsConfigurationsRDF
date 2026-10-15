@@ -323,49 +323,44 @@ float mT2(
 
 
 //
-// computeLeptonAngles -- the angular variables that survive the two neutrinos
+// computeLeptonAngles -- the angular structure that survives the two neutrinos
 //
-// What the polarisation measurement actually wants is cos(theta*): the polar
-// angle of the charged lepton in its W rest frame, measured against the W
-// flight direction. It goes as (1 - cos^2 theta*) for a longitudinal W and as
-// (1 -+ cos theta*)^2 for a transverse one, and it is THE observable the LL
-// fraction is defined by.
+// What the measurement is defined by is cos(theta*): the polar angle of the
+// charged lepton in its own W rest frame against the W flight direction,
+// (1 - cos^2 theta*) for a longitudinal W and (1 -+ cos theta*)^2 for a
+// transverse one. It is not reconstructable in this channel, and the reason
+// is a counting, not a resolution problem: two neutrinos are six unknowns,
+// MET gives two constraints and m(l nu) = m_W on each W gives two more, so
+// four constraints for six unknowns leave a two-parameter family and not a
+// discrete ambiguity. (Dileptonic ttbar looks like the same problem and is
+// solvable only because the two top-mass constraints bring the count to six.)
 //
-// It is not reconstructable here, and the reason is a counting, not a
-// resolution problem. Two neutrinos are six unknowns. MET gives two
-// constraints and m(l nu) = m_W on each W gives two more: four constraints
-// for six unknowns, so what is left is a two-parameter family, not a discrete
-// ambiguity. (Dileptonic ttbar looks like the same problem and is solvable
-// only because the two top mass constraints bring the count to six.) Closing
-// those two degrees of freedom is a *prescription* -- minimise the |pz| of
-// the pair, take each neutrino collinear with its lepton, maximise a
-// likelihood -- and a prescription belongs offline, where it can be changed
-// without resubmitting, not frozen into the ntuple. snapshot.py therefore
-// dumps both leptons and MET as px/py and leaves the solving to python.
+// Neither ATLAS nor CMS reconstructs it here. The ATLAS same-sign WW
+// polarisation analysis (arXiv:2503.11317) feeds its DNNs only transverse
+// and visible quantities -- transverse masses, dphi, deta, dR, dy and the
+// Zeppenfeld variables -- and no cos(theta*) at all. The variable list in
+// aliases.py follows theirs.
 //
-// What IS computable from the visible objects alone is the angular structure
-// of the dilepton system, which is the standard substitute when the helicity
-// frame of each W is out of reach. This returns:
+// What this adds on top of that list is the angular structure of the
+// dilepton system, which is well defined without any neutrino:
 //
-//   [0] cosThetaCS  Collins-Soper polar angle of the pair. The CS axis
-//                   bisects the two beam directions in the pair rest frame,
-//                   which is what makes it insensitive to the unknown
-//                   longitudinal boost -- the whole reason the frame exists.
-//                   Closed form in lab quantities, no boost needed.
-//   [1] cosThetaHel cos of the angle between the leading lepton and the pair
-//                   flight direction, in the pair rest frame. The direct
-//                   analogue of cos(theta*) one level up: the decay angle of
-//                   the ll system instead of of each W.
-//   [2] cosThetaStarApprox  cos(theta*) of the leading lepton in the
-//                   collinear approximation, i.e. assuming each W is boosted
-//                   enough that its neutrino follows its lepton, so the W
-//                   direction is the lepton direction and the only unknown
-//                   left is the energy sharing. Crude, and it degrades badly
-//                   at low W pT; it is here as the baseline that an offline
-//                   solver has to beat, not as a recommended input.
+//   [0] cosThetaCS   Collins-Soper polar angle of the pair. The CS axis
+//                    bisects the two beam directions in the pair rest frame,
+//                    which is what makes it insensitive to the unknown
+//                    longitudinal boost. Closed form in lab quantities.
+//   [1] cosThetaHel  cos of the angle between the LEADING lepton and the
+//                    pair flight direction, in the pair rest frame.
 //
-// Returns -9999 unless there are exactly two leptons, as every other function
-// in this file does.
+// Both are ONE number for the pair, not one per lepton. In the rest frame of
+// (l1 + l2) the two momenta are exactly back to back, so the subleading
+// lepton gives exactly minus the leading one for either definition: a second
+// branch would be -1 times the first and carry no information. Which lepton
+// is "leading" is a pT ordering and therefore arbitrary with respect to the
+// physics, so the sign of these two is meaningful only together with
+// dnn_ptAsymll; if an unordered variable is wanted, take |cos|.
+//
+// Returns -9999 unless there are exactly two leptons, as every other
+// function in this file does.
 //
 ROOT::RVec<float> computeLeptonAngles(
     const ROOT::RVec<float>& pt,
@@ -373,7 +368,7 @@ ROOT::RVec<float> computeLeptonAngles(
     const ROOT::RVec<float>& phi,
     const ROOT::RVec<int>&   pdgId
 ) {
-    if ((int)pt.size() != 2) return {-9999.f, -9999.f, -9999.f};
+    if ((int)pt.size() != 2) return {-9999.f, -9999.f};
 
     TLorentzVector l1, l2;
     l1.SetPtEtaPhiM(pt[0], eta[0], phi[0], lepton_mass(pdgId[0]));
@@ -382,7 +377,7 @@ ROOT::RVec<float> computeLeptonAngles(
 
     const double m  = ll.M();
     const double qT = ll.Pt();
-    if (m <= 0.) return {-9999.f, -9999.f, -9999.f};
+    if (m <= 0.) return {-9999.f, -9999.f};
 
     // ---- Collins-Soper, closed form in lab quantities
     const double r2  = std::sqrt(2.);
@@ -404,17 +399,41 @@ ROOT::RVec<float> computeLeptonAngles(
             cosHel = l1s.Vect().Unit().Dot(ll.Vect().Unit());
     }
 
-    // ---- collinear approximation
-    const double mW  = 80.377;
-    const double dot = l1.Dot(ll);
-    double cosApprox = -9999.;
-    if (dot > 0.) {
-        cosApprox = 1. - mW * mW / dot;
-        if (cosApprox >  1.) cosApprox =  1.;
-        if (cosApprox < -1.) cosApprox = -1.;
-    }
+    return {(float)cosCS, (float)cosHel};
+}
 
-    return {(float)cosCS, (float)cosHel, (float)cosApprox};
+
+//
+// deltaYjj -- RAPIDITY gap of the two tagging jets
+//
+// Not the same as detajj. The analysis regions cut on the pseudorapidity gap
+// and that stays as it is, but the ATLAS polarisation DNN
+// (arXiv:2503.11317, Table 2) uses the rapidity difference, and for a
+// massive jet the two differ. Rapidity is also the quantity that is additive
+// under a longitudinal boost, which is what a Zeppenfeld-like variable is
+// really about.
+//
+// Takes the jet masses already gathered through CleanJet_jetIdx, so this
+// function never sees the ULong64_t index type.
+//
+float deltaYjj(
+    const ROOT::RVec<float>& jet_pt,
+    const ROOT::RVec<float>& jet_eta,
+    const ROOT::RVec<float>& jet_mass
+) {
+    if ((int)jet_pt.size() < 2) return -1.f;
+
+    auto rapidity = [](float pt, float eta, float mass) -> double {
+        const double pz = pt * std::sinh(eta);
+        const double e  = std::sqrt(pt * pt * std::cosh(eta) * std::cosh(eta)
+                                    + (double)mass * mass);
+        if (e <= std::abs(pz)) return (double)eta;   // degenerate, fall back
+        return 0.5 * std::log((e + pz) / (e - pz));
+    };
+
+    const double y1 = rapidity(jet_pt[0], jet_eta[0], jet_mass.size() > 0 ? jet_mass[0] : 0.f);
+    const double y2 = rapidity(jet_pt[1], jet_eta[1], jet_mass.size() > 1 ? jet_mass[1] : 0.f);
+    return (float)std::abs(y1 - y2);
 }
 
 

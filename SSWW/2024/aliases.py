@@ -858,33 +858,28 @@ for _i, _l in ((2, 'l3'), (3, 'l4')):
 # ------------------------------------------------
 # Angular variables
 #
-# The observable the measurement is defined by is cos(theta*), the polar angle
-# of the charged lepton in its own W rest frame against the W flight
-# direction: (1 - cos^2 theta*) for a longitudinal W, (1 -+ cos theta*)^2 for
-# a transverse one.
+# The observable the measurement is defined by is cos(theta*), the polar
+# angle of the charged lepton in its own W rest frame against the W flight
+# direction. It is NOT here, and not by oversight: two neutrinos are six
+# unknowns, MET and the two m(l nu) = m_W give four constraints, so what is
+# left is a two-parameter family and not a discrete ambiguity. Closing it is
+# a prescription; the prescription stays offline, where changing it costs a
+# re-read and not a resubmission, and the ingredients (both leptons, MET as
+# px/py) are dumped for it.
 #
-# It is NOT here, and not by oversight. Two neutrinos are six unknowns; MET
-# gives two constraints and m(l nu) = m_W on each W gives two more, so four
-# constraints for six unknowns leave a two-parameter family -- not a discrete
-# two-fold ambiguity that could be resolved by a choice. Closing those two
-# degrees of freedom is a prescription, and a prescription that is still being
-# chosen must not be frozen into the ntuple. The ingredients are dumped
-# instead (both leptons, MET as px/py) and the solving is done offline, where
-# changing it costs a re-read and not a resubmission.
+# This is also what the field does. The ATLAS same-sign WW polarisation
+# analysis, arXiv:2503.11317, reconstructs no neutrino and uses no
+# cos(theta*): its DNN inputs are transverse masses, dphi, deta, dR, dy, the
+# Zeppenfeld variables and the jet/lepton kinematics. Everything in their
+# Table 2 is in this file, and the three they have that were missing --
+# dphi(j, l1), dphi(MET, l), the projected mTo and the rapidity gap dyjj --
+# are added below.
 #
-# What is below is what the *visible* objects can give. See
-# computeLeptonAngles in VBS_functions.cpp for the derivations.
-#   [0] Collins-Soper polar angle of the pair -- the standard substitute when
-#       the helicity frame is out of reach, built to be insensitive to the
-#       unknown longitudinal boost
-#   [1] helicity angle of the pair: the same construction as cos(theta*) but
-#       for the ll system instead of each W
-#   [2] cos(theta*) in the collinear approximation -- crude, and here as the
-#       baseline an offline solver has to beat
-#
-# The gen-level truth angles, which stage 3 regresses onto, are built offline
-# from the LHEPart_* branches: no C++ here, so an absent LHE record costs the
-# truth target and not a crashed job.
+# cosThetaCS and cosThetaHel are ONE number each, for the pair, not one per
+# lepton: in the rest frame of (l1 + l2) the two momenta are exactly back to
+# back, so the subleading lepton gives exactly minus the leading one and a
+# second branch would carry no information. Take |cos| if an ordering-
+# independent variable is wanted.
 # ------------------------------------------------
 aliases['lep_angles'] = {
     'function' : 'computeLeptonAngles',
@@ -892,9 +887,82 @@ aliases['lep_angles'] = {
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
-aliases['dnn_cosThetaCS']     = {'expr': 'lep_angles[0]', 'samples': ALL}
-aliases['dnn_cosThetaHel']    = {'expr': 'lep_angles[1]', 'samples': ALL}
-aliases['dnn_cosThetaStarApprox'] = {'expr': 'lep_angles[2]', 'samples': ALL}
+aliases['dnn_cosThetaCS']  = {'expr': 'lep_angles[0]', 'samples': ALL}
+aliases['dnn_cosThetaHel'] = {'expr': 'lep_angles[1]', 'samples': ALL}
+
+# Rapidity gap of the tagging jets. detajj (pseudorapidity) is what the
+# analysis regions cut on and it stays; this is what the ATLAS DNN uses, and
+# for a massive jet the two are not the same.
+aliases['dnn_dyjj'] = {
+    'function' : 'deltaYjj',
+    'variables': ['CleanJet_pt', 'CleanJet_eta',
+                  'Take(Jet_mass, CleanJet_jetIdx, 0.f)'],
+    'external' : '../utils/macros/VBS_functions.cpp',
+    'samples'  : ALL
+}
+
+# dphi between each tagging jet and the leading lepton, and between MET and
+# each lepton. ATLAS Table 2 keeps these separately from the dR and the
+# Zeppenfeld variables because they carry the azimuthal correlation that the
+# rapidity-based ones integrate over.
+for _n, _i in (('j1', 0), ('j2', 1)):
+    aliases['dnn_dphi_%sl1' % _n] = {
+        'expr': ('CleanJet_pt.size() > %d && nLepSel > 0'
+                 ' ? (float)abs(ROOT::VecOps::DeltaPhi(CleanJet_phi[%d], SelLep_phi[0]))'
+                 ' : -1.f' % (_i, _i)),
+        'samples': ALL
+    }
+for _n, _i in (('l1', 0), ('l2', 1)):
+    aliases['dnn_dphi_MET%s' % _n] = {
+        'expr': ('nLepSel > %d'
+                 ' ? (float)abs(ROOT::VecOps::DeltaPhi(SelLep_phi[%d], (float)PuppiMET_phi))'
+                 ' : -1.f' % (_i, _i)),
+        'samples': ALL
+    }
+
+# Smallest dR between any selected lepton and any jet above 30 GeV. The
+# per-lepton versions (dnn_drl1j_min, dnn_drl2j_min) are over the two tagging
+# jets only; this one is over the whole jet collection, which is what catches
+# a lepton sitting inside a soft jet -- the nonprompt signature.
+aliases['dnn_drlj_min'] = {
+    'expr': ('nLepSel > 0 && Sum(CleanJet_pt > 30.f) > 0'
+             ' ? (float)ROOT::VecOps::Min('
+             '     ROOT::VecOps::DeltaR('
+             '       ROOT::VecOps::Take(SelLep_eta, 1),'
+             '       CleanJet_eta[CleanJet_pt > 30.f],'
+             '       ROOT::VecOps::Take(SelLep_phi, 1),'
+             '       CleanJet_phi[CleanJet_pt > 30.f]))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# Projected / total transverse mass, ATLAS Table 2:
+#   mTo = sqrt( (ptl1 + ptl2 + MET)^2 - |ptvec_l1 + ptvec_l2 + METvec|^2 )
+# Distinct from dnn_mTww, which treats the dilepton as one visible object;
+# this one keeps the two leptons separate in the scalar term, so it responds
+# differently to a configuration where the leptons are back to back.
+aliases['dnn_vsum_px'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)(SelLep_pt[0]*cos(SelLep_phi[0]) + SelLep_pt[1]*cos(SelLep_phi[1])'
+             '           + PuppiMET_pt*cos(PuppiMET_phi))'
+             ' : -9999.f'),
+    'samples': ALL
+}
+aliases['dnn_vsum_py'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)(SelLep_pt[0]*sin(SelLep_phi[0]) + SelLep_pt[1]*sin(SelLep_phi[1])'
+             '           + PuppiMET_pt*sin(PuppiMET_phi))'
+             ' : -9999.f'),
+    'samples': ALL
+}
+aliases['dnn_mTo'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)sqrt(std::max(0.,'
+             '     pow((double)(SelLep_pt[0] + SelLep_pt[1] + PuppiMET_pt), 2)'
+             '   - pow((double)dnn_vsum_px, 2) - pow((double)dnn_vsum_py, 2)))'
+             ' : -1.f'),
+    'samples': ALL
+}
 
 ###############################################################################
 #                                                                             #

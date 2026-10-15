@@ -231,14 +231,16 @@ _dnn_pair = [
     'dnn_drll',
     'dnn_etall',
     'dnn_ptAsymll',
-    # angular structure of the pair. cos(theta*) of each W against its own
+    # Angular structure of the pair. cos(theta*) of each W against its own
     # flight direction -- the observable the measurement is defined by -- is
     # NOT here: two neutrinos leave two unresolved degrees of freedom even
-    # after MET and both m(l nu) = m_W, so it is a prescription and it is made
-    # offline. See computeLeptonAngles in VBS_functions.cpp.
+    # after MET and both m(l nu) = m_W, so it is a prescription, and it is
+    # made offline. Neither ATLAS nor CMS reconstructs it in this channel
+    # either (arXiv:2503.11317). One number each, for the pair: the two
+    # leptons are back to back in the pair rest frame, so the subleading one
+    # gives exactly minus the leading one.
     'dnn_cosThetaCS',
     'dnn_cosThetaHel',
-    'dnn_cosThetaStarApprox',
 ]
 
 # MET and the transverse WW system
@@ -248,7 +250,12 @@ _dnn_met = [
     'dnn_met_px',
     'dnn_met_py',
     'dnn_dphi_llMET',
+    'dnn_dphi_METl1',
+    'dnn_dphi_METl2',
     'dnn_mTww',
+    'dnn_mTo',          # the projected transverse mass of ATLAS Table 2
+    'dnn_vsum_px',
+    'dnn_vsum_py',
     'dnn_mindphi_METjet',
     'proxyW_l1',       # mT(l1, MET)
     'proxyW_l2',       # mT(l2, MET)
@@ -258,8 +265,11 @@ _dnn_met = [
 # the VBS dijet
 _dnn_jets = [
     'mjj',
-    'detajj',
+    'detajj',           # pseudorapidity gap: what the regions cut on
+    'dnn_dyjj',         # rapidity gap: what the ATLAS DNN uses
     'dnn_dphijj',
+    'dnn_dphi_j1l1',
+    'dnn_dphi_j2l1',
     'dnn_drjj',
     'dnn_ptjj',
     'dnn_etaProdjj',
@@ -294,6 +304,7 @@ _dnn_activity = [
 _dnn_lepjet = [
     'dnn_drl1j_min',
     'dnn_drl2j_min',
+    'dnn_drlj_min',
     'dr_lj',           # function alias, the full 4-vector of combinations
     'm_lj',            # idem
     'm_l1j1', 'm_l1j2', 'm_l2j1', 'm_l2j2',
