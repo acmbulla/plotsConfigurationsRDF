@@ -925,15 +925,11 @@ for _n, _i in (('l1', 0), ('l2', 1)):
 # jets only; this one is over the whole jet collection, which is what catches
 # a lepton sitting inside a soft jet -- the nonprompt signature.
 aliases['dnn_drlj_min'] = {
-    'expr': ('nLepSel > 0 && Sum(CleanJet_pt > 30.f) > 0'
-             ' ? (float)ROOT::VecOps::Min('
-             '     ROOT::VecOps::DeltaR('
-             '       ROOT::VecOps::Take(SelLep_eta, 1),'
-             '       CleanJet_eta[CleanJet_pt > 30.f],'
-             '       ROOT::VecOps::Take(SelLep_phi, 1),'
-             '       CleanJet_phi[CleanJet_pt > 30.f]))'
-             ' : -1.f'),
-    'samples': ALL
+    'function' : 'minDeltaRLepJet',
+    'variables': ['SelLep_eta', 'SelLep_phi',
+                  'CleanJet_pt', 'CleanJet_eta', 'CleanJet_phi'],
+    'external' : '../utils/macros/VBS_functions.cpp',
+    'samples'  : ALL
 }
 
 # Projected / total transverse mass, ATLAS Table 2:

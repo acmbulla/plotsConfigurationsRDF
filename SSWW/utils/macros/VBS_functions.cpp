@@ -437,4 +437,43 @@ float deltaYjj(
 }
 
 
+//
+// minDeltaRLepJet
+// Smallest DeltaR between any selected lepton and any jet above 30 GeV.
+// Returns -1 when either collection is empty after the pt cut.
+//
+// Written as an explicit double loop rather than as an RVec expression on
+// purpose: ROOT::VecOps::DeltaR is ELEMENT-WISE and throws
+// "Cannot call operator - on vectors of different sizes" the moment the two
+// collections have different lengths, which for leptons against jets is
+// almost always. The pt threshold is a constructor-style constant and so
+// cannot be a column, hence it lives here (CLAUDE.md section 7, constraint 1).
+//
+float minDeltaRLepJet(
+    const ROOT::RVec<float>& lep_eta,
+    const ROOT::RVec<float>& lep_phi,
+    const ROOT::RVec<float>& jet_pt,
+    const ROOT::RVec<float>& jet_eta,
+    const ROOT::RVec<float>& jet_phi
+) {
+    const float jetPtMin = 30.f;
+    const int nL = (int)std::min(lep_eta.size(), lep_phi.size());
+    const int nJ = (int)std::min(jet_pt.size(), std::min(jet_eta.size(), jet_phi.size()));
+
+    float best = std::numeric_limits<float>::max();
+    for (int iL = 0; iL < nL; ++iL) {
+        for (int iJ = 0; iJ < nJ; ++iJ) {
+            if (jet_pt[iJ] <= jetPtMin) continue;
+            const float deta = lep_eta[iL] - jet_eta[iJ];
+            float dphi = lep_phi[iL] - jet_phi[iJ];
+            while (dphi >  M_PI) dphi -= 2*M_PI;
+            while (dphi < -M_PI) dphi += 2*M_PI;
+            const float dr = std::sqrt(deta*deta + dphi*dphi);
+            if (dr < best) best = dr;
+        }
+    }
+    return (best == std::numeric_limits<float>::max()) ? -1.f : best;
+}
+
+
 #endif // VBS_FUNCTIONS_H
