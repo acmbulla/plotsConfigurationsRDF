@@ -37,29 +37,29 @@ fakeDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, fakeSteps)
 dataDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, dataSteps)
 print(treeBaseDir)
 
-# # # merge cuts
-# # _mergedCuts = []
-# # for cut in list(cuts.keys()):
-# #     __cutExpr = ''
-# #     if type(cuts[cut]) == dict:
-# #         __cutExpr = cuts[cut]['expr']
-# #         for cat in list(cuts[cut]['categories'].keys()):
-# #             _mergedCuts.append(cut + '_' + cat)
-# #     elif type(cuts[cut]) == str:
-# #         _mergedCuts.append(cut)
+# # merge cuts
+# _mergedCuts = []
+# for cut in list(cuts.keys()):
+#     __cutExpr = ''
+#     if type(cuts[cut]) == dict:
+#         __cutExpr = cuts[cut]['expr']
+#         for cat in list(cuts[cut]['categories'].keys()):
+#             _mergedCuts.append(cut + '_' + cat)
+#     elif type(cuts[cut]) == str:
+#         _mergedCuts.append(cut)
 
-# # cuts2j = _mergedCuts
+# cuts2j = _mergedCuts
 
-# # nuisances = {}
+# nuisances = {}
 
-# ################################ EXPERIMENTAL UNCERTAINTIES  #################################
+################################ EXPERIMENTAL UNCERTAINTIES  #################################
 
-# # https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
-# # 2022: 34.75 fb⁻¹ (±1.4%)
-# # 2023: 28.40 fb⁻¹ (±1.3%)
-# # 2024: 110.11 fb⁻¹ (±1.6%)
-# # 2025: 125.07 fb⁻¹ (±5%) — preliminare
-# # 2026: nessuna incertezza disponibile ancora
+# https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
+# 2022: 34.75 fb⁻¹ (±1.4%)
+# 2023: 28.40 fb⁻¹ (±1.3%)
+# 2024: 110.11 fb⁻¹ (±1.6%)
+# 2025: 125.07 fb⁻¹ (±5%) — preliminare
+# 2026: nessuna incertezza disponibile ancora
 
 
 # nuisances['lumi_1'] = {
@@ -375,53 +375,53 @@ print(treeBaseDir)
 #     }
 
 
-# # nuisances['fake_syst'] = {
-# #     'name': 'CMS_fake_syst',
-# #     'type': 'lnN',
-# #     'samples': {
-# #         'Fake': '1.3'
-# #     },
-# # }
+# nuisances['fake_syst'] = {
+#     'name': 'CMS_fake_syst',
+#     'type': 'lnN',
+#     'samples': {
+#         'Fake': '1.3'
+#     },
+# }
 
-# # nuisances['fake_ele'] = {
-# #     'name': 'CMS_fake_e_2024',
-# #     'skipCMS' : 1,
-# #     'kind': 'weight',
-# #     'type': 'shape',
-# #     'samples': {
-# #         'Fake': ['fakeWEleUp', 'fakeWEleDown'],
-# #     }
-# # }
+# nuisances['fake_ele'] = {
+#     'name': 'CMS_fake_e_2024',
+#     'skipCMS' : 1,
+#     'kind': 'weight',
+#     'type': 'shape',
+#     'samples': {
+#         'Fake': ['fakeWEleUp', 'fakeWEleDown'],
+#     }
+# }
 
-# # nuisances['fake_ele_stat'] = {
-# #     'name': 'CMS_fake_stat_e_2024',
-# #     'skipCMS' : 1,
-# #     'kind': 'weight',
-# #     'type': 'shape',
-# #     'samples': {
-# #         'Fake': ['fakeWStatEleUp', 'fakeWStatEleDown'],
-# #     }
-# # }
+# nuisances['fake_ele_stat'] = {
+#     'name': 'CMS_fake_stat_e_2024',
+#     'skipCMS' : 1,
+#     'kind': 'weight',
+#     'type': 'shape',
+#     'samples': {
+#         'Fake': ['fakeWStatEleUp', 'fakeWStatEleDown'],
+#     }
+# }
 
-# # nuisances['fake_mu'] = {
-# #     'name': 'CMS_fake_m_2024',
-# #     'skipCMS' : 1,
-# #     'kind': 'weight',
-# #     'type': 'shape',
-# #     'samples': {
-# #         'Fake': ['fakeWMuUp', 'fakeWMuDown'],
-# #     }
-# # }
+# nuisances['fake_mu'] = {
+#     'name': 'CMS_fake_m_2024',
+#     'skipCMS' : 1,
+#     'kind': 'weight',
+#     'type': 'shape',
+#     'samples': {
+#         'Fake': ['fakeWMuUp', 'fakeWMuDown'],
+#     }
+# }
 
-# # nuisances['fake_mu_stat'] = {
-# #     'name': 'CMS_fake_stat_m_2024',
-# #     'skipCMS' : 1,
-# #     'kind': 'weight',
-# #     'type': 'shape',
-# #     'samples': {
-# #         'Fake': ['fakeWStatMuUp', 'fakeWStatMuDown'],
-# #     }
-# # }
+# nuisances['fake_mu_stat'] = {
+#     'name': 'CMS_fake_stat_m_2024',
+#     'skipCMS' : 1,
+#     'kind': 'weight',
+#     'type': 'shape',
+#     'samples': {
+#         'Fake': ['fakeWStatMuUp', 'fakeWStatMuDown'],
+#     }
+# }
 
 # autoStats = True
 # if autoStats:

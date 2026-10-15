@@ -9,7 +9,7 @@ import inspect
 
 ALL = [skey for skey in samples]
 mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
-lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ')]
+lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
 btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
 macros = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/macros/'
@@ -23,22 +23,94 @@ muWP  = 'cut_TightID_pfIsoTight_HWW_tthmva_67'
 
 Tag = 'ele_'+eleWP+'_mu_'+muWP
 
-# -------- lepton WP
-aliases['LepWPCut'] = {
-    'expr': 'LepCut2l__ele_'+eleWP+'__mu_'+muWP ,
+# -------- lepton multiplicity, counted above threshold
+#
+# AN2025_031 Sec. 4 counts leptons with pT > 10 GeV ("two, three, or four
+# isolated charged leptons with pT > 10 GeV [...] Candidate events with five or
+# more charged leptons satisfying the loose identification criteria are
+# rejected"), while Lepton_pt.size() counts the whole collection, which reaches
+# down to ~3 GeV. An event with three good leptons plus one soft spurious one is
+# a 3-lepton event, not a 4-lepton one, and must not migrate out of the WZ
+# regions.
+#
+# This works -- and switching the weights on it is safe -- only because the
+# Lepton collection is pT-ordered, so the leptons above threshold are always the
+# *first* nLepSel ones (verified: 0 violations in 77k events, thresholds 10, 15
+# and 20 GeV). That prefix is exactly what LepCut{N}l, LepSF{N}l, SFweight{N}l
+# and Lepton_promptgenmatched[0..N-1] refer to, so the tight requirement, the
+# lepton SF, the global SF and the prompt gen-matching all keep pointing at the
+# selected leptons and at nothing else.
+ptMinLep = 10.
+
+aliases['nLepSel'] = {
+    'expr': 'Sum(Lepton_pt > %ff)' % ptMinLep,
     'samples': ALL
 }
 
-aliases['LepWPSF'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__mu_'+muWP,
+# the selected leptons themselves, for the helpers that take the collection.
+# Take(v, n) with n > 0 returns the first n entries, i.e. the prefix above.
+for _c in ('pt', 'eta', 'phi', 'pdgId'):
+    aliases['SelLep_' + _c] = {
+        'expr': 'Take(Lepton_%s, nLepSel)' % _c,
+        'samples': ALL
+    }
+
+# -------- lepton WP, per lepton multiplicity
+#
+# Every region pins nLepSel with '==' (see cuts.py):
+#     WW_SR, nonprompt_CR, WW_VR_bveto, WW_VR_btag   -> 2
+#     WZ_SR, WZb_CR, WZ_VR_bveto, WZ_VR_btag         -> 3
+#     ZZ_VR                                          -> 4
+# so switching on that count picks exactly the multiplicity the region requires.
+# A region written with '>=' instead of '==' would silently get the weight of
+# whichever multiplicity the event happens to have.
+#
+# These four always have to agree on N -- the tight requirement, the lepton SF,
+# the global SF and the prompt gen-matching. The nanoAOD provides LepCut{N}l,
+# LepSF{N}l, SFweight{N}l and Lepton_promptgenmatched for N = 2, 3, 4.
+nlep = 'nLepSel'
+
+for N in (1, 2, 3, 4):
+    aliases['LepWPCut%dl' % N] = {
+        'expr': 'LepCut%dl__ele_' % N + eleWP + '__mu_' + muWP,
+        'samples': ALL
+    }
+    aliases['LepWPSF%dl' % N] = {
+        'expr': 'LepSF%dl__ele_' % N + eleWP + '__mu_' + muWP,
+        'samples': mc
+    }
+    # prompt gen-matching of the first N leptons. GenLepMatch{N}l in the nanoAOD
+    # matches to *any* gen lepton, which is not what we want: a nonprompt lepton
+    # matched to a gen lepton from a b decay would pass.
+    aliases['PromptGenLepMatch%dl' % N] = {
+        'expr': ' * '.join(
+            '(Lepton_promptgenmatched.size() > %d ? Lepton_promptgenmatched[%d] : 0.)' % (i, i)
+            for i in range(N)),
+        'samples': mc
+    }
+
+# region-aware versions. Exactly one term survives per event, because the
+# region pinned the size; an event outside 2-4 gets 0 rather than a wrong SF.
+aliases['LepWPCutN'] = {
+    'expr': ' + '.join('(%s == %d) * LepWPCut%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': ALL
+}
+aliases['LepWPSFN'] = {
+    'expr': ' + '.join('(%s == %d) * LepWPSF%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': mc
+}
+aliases['SFweightNl'] = {
+    'expr': ' + '.join('(%s == %d) * SFweight%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': mc
+}
+aliases['PromptGenLepMatchN'] = {
+    'expr': ' + '.join('(%s == %d) * PromptGenLepMatch%dl' % (nlep, N, N) for N in (2, 3, 4)),
     'samples': mc
 }
 
-# gen-matching to prompt only (GenLepMatch2l matches to *any* gen lepton)
-aliases['PromptGenLepMatch2l'] = {
-    'expr': '(Lepton_promptgenmatched.size() > 0 ? Lepton_promptgenmatched[0] : 0.) * (Lepton_promptgenmatched.size() > 1 ? Lepton_promptgenmatched[0] : 0.)',
-    'samples': mc
-}
+# the old names keep working, so samples.py and nuisances.py need no change
+aliases['LepWPCut'] = {'expr': 'LepWPCutN', 'samples': ALL}
+aliases['LepWPSF']  = {'expr': 'LepWPSFN',  'samples': mc}
 
 # ------------------------------------------------
 # Same-sign 2-lepton flavour aliases (WW SR)
@@ -65,7 +137,7 @@ aliases['emu'] = {
 # ------------------------------------------------
 aliases['zstar_max'] = {
     'function' : 'computeZstar',
-    'variables': ['Lepton_eta', 'CleanJet_eta'],
+    'variables': ['SelLep_eta', 'CleanJet_eta'],
     'external' : '../../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
@@ -79,7 +151,7 @@ aliases['zstar_max'] = {
 # ------------------------------------------------
 aliases['WZ_vars'] = {
     'function' : 'computeWZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId',
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId',
                   'PuppiMET_pt', 'PuppiMET_phi'],
     'external' : '../../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
@@ -108,7 +180,7 @@ aliases['mmm'] = { 'expr': 'WZ_flav == 1313', 'samples': ALL }  # Z->mumu, W->mu
 # ------------------------------------------------
 aliases['ZZ_vars'] = {
     'function' : 'computeZZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId'],
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId'],
     'external' : '../../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
@@ -206,6 +278,23 @@ aliases['noJetInHorn'] = {
     'samples' : ALL
 }
 
+# The fake-rate reader guards on Lepton_pt.size() == nLeptons_, so it has to be
+# fed the selected leptons too. Fed the full collection while the regions pin
+# nLepSel, the instances stop being mutually exclusive: in a 2-lepton region an
+# event whose third lepton is below threshold has size() == 3, so the 3l
+# instance fires and looks the fake rate up below the lowest pT bin of the map,
+# which comes back NaN and poisons the whole histogram.
+for _c, _e in (
+        ('isTightMuon',     f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})'),
+        ('isTightElectron', f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})'),
+        ('muonIdx',         'ROOT::VecOps::RVec<int>(Lepton_muonIdx)')):
+    # ALL, not ['Fake']: the measurement needs the per-lepton tight flags on the
+    # data and on the prompt MC that gets subtracted, not only on a Fake sample.
+    aliases['SelLep_' + _c] = {
+        'expr'   : f'Take({_e}, nLepSel)',
+        'samples': ALL,
+    }
+
 for kind, label in [
     ('nominal',     ''),
     ('EleUp',       'EleUp'),
@@ -217,28 +306,38 @@ for kind, label in [
     ('StatMuUp',    'StatMuUp'),
     ('StatMuDown',  'StatMuDown'),
 ]:
-    alias_name = 'fakeW' + label
-    inst_name  = 'fr_reader_' + (label if label else 'nominal')
-    aliases[alias_name] = {
-        # the class is compiled into the generated .cpp, not declared at runtime
-        'external'     : f'{macros}fake_rate_reader_class.cc',
-        # one global instance per variation, built before main()
-        'linesToGlobal': [
-            f'fake_rate_reader {inst_name}("{eleWP}", "{muWP}", "{kind}", 2, "std", '
-            f'"{fakerates}", "2024_v15_pt");'
-        ],
-        'function'     : inst_name,
-        # The typed Define() matches column types exactly and never converts,
-        # unlike the JIT-compiled 'expr' this replaces, so each column is cast to
-        # exactly what operator() declares. nCleanJet is Int_t, which already
-        # matches the int parameter; pt/eta are float and Lepton_pdgId is int,
-        # as VBS_functions.cpp already relies on.
-        'variables'    : ['Lepton_pdgId', 'Lepton_pt', 'Lepton_eta',
-                          f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})',
-                          f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})',
-                          'ROOT::VecOps::RVec<int>(Lepton_muonIdx)',
-                          'CleanJet_pt', '(int)nCleanJet'],
-        'samples'      : ['Fake'],
+    # One instance per variation AND per multiplicity. The class handles
+    # nLeptons 2 and 3 only, and its isTight_ array holds 3, so there is
+    # deliberately no 4-lepton instance: in ZZ_VR the fake estimate is 0.
+    # Each instance returns 0 unless the event has exactly its own lepton
+    # count, so the two can simply be summed.
+    for N in (2, 3):
+        aliases['fakeW%dl' % N + label] = {
+            # the class is compiled into the generated .cpp, not declared at runtime
+            'external'     : f'{macros}fake_rate_reader_class.cc',
+            # one global instance per variation, built before main()
+            'linesToGlobal': [
+                f'fake_rate_reader fr_reader_{N}l_{label or "nominal"}'
+                f'("{eleWP}", "{muWP}", "{kind}", {N}, "std", '
+                f'"{fakerates}", "2024_v15_pt");'
+            ],
+            'function'     : f'fr_reader_{N}l_{label or "nominal"}',
+            # The typed Define() matches column types exactly and never converts,
+            # unlike the JIT-compiled 'expr' this replaces, so each column is cast
+            # to exactly what operator() declares. nCleanJet is Int_t, which
+            # already matches the int parameter; pt/eta are float and Lepton_pdgId
+            # is int, as VBS_functions.cpp already relies on.
+            'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
+                              'SelLep_isTightMuon',
+                              'SelLep_isTightElectron',
+                              'SelLep_muonIdx',
+                              'CleanJet_pt', '(int)nCleanJet'],
+            'samples'      : ['Fake'],
+        }
+
+    aliases['fakeW' + label] = {
+        'expr'   : 'fakeW2l%s + fakeW3l%s' % (label, label),
+        'samples': ['Fake'],
     }
 
 #Top pT reweighting
@@ -371,55 +470,25 @@ aliases['LHEPdfWeight_vec']   = {'expr': 'ROOT::VecOps::RVec<double>(LHEPdfWeigh
 # data/MC scale factors
 
 # Use this for the usual SF
-# aliases['SFweight'] = {
-#     'expr': ' * '.join(['SFweight2l', 'LepWPCut', 'LepWPSF', 'btagSFbc', 'btagSFlight']),
-#     'samples': mc
-# }
-
-aliases['SFweightEleUp'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__Up',
-    'samples': mc
-}
-aliases['SFweightEleDown'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__Down',
-    'samples': mc
-}
-aliases['SFweightMuUp'] = {
-    'expr': 'LepSF2l__mu_'+muWP+'__Up',
-    'samples': mc
-}
-aliases['SFweightMuDown'] = {
-    'expr': 'LepSF2l__mu_'+muWP+'__Down',
+# Each factor switches on the same pinned size, so the product is the
+# single-multiplicity weight of whichever region the event belongs to.
+aliases['SFweight'] = {
+    'expr': ' * '.join(['SFweightNl', 'LepWPCutN', 'LepWPSFN', 'btagSFbc', 'btagSFlight']),
     'samples': mc
 }
 
+# lepton SF variations, switched on the multiplicity like the nominal above.
+# NB: the nuisances using these are currently commented out in nuisances.py.
+for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
+    for _var in ('Up', 'Down'):
+        aliases['SFweight' + _tag + _var] = {
+            'expr': ' + '.join(
+                '(%s == %d) * LepSF%dl__%s_%s__%s' % (nlep, N, N, _flav, _wp, _var)
+                for N in (2, 3, 4)),
+            'samples': mc
+        }
 
-aliases['isFR_QCD_CR'] = {
-    'expr': (
-        'bVeto'
-        ' && !('
-            'Lepton_pt.size() == 2'
-            ' && (Lepton_pdgId[0] + Lepton_pdgId[1]) == 0'
-            ' && mll > 60 && mll < 120'
-        ')'
-    ),
-    'samples': ALL
-}
 
-aliases['isFR_DY_CR'] = {
-    'expr': (
-        'bVeto'
-        ' && Lepton_pt.size() == 2'
-        ' && (Lepton_pdgId[0] + Lepton_pdgId[1]) == 0'
-        ' && mll > 60 && mll < 120'
-    ),
-    'samples': ALL
-}
-
-aliases['isFR_top_CR'] = {
-    'expr': 'bReq',
-    'samples': ALL
-}
 
 #
 # if some variables are not defined but they are needed as inputs of the TMVA, define them!
@@ -433,3 +502,219 @@ aliases['isFR_top_CR'] = {
 #   'samples': ALL
 # }
 
+# ===========================================================================
+# Fake-rate measurement
+#
+# One region, with the requirements that depend on how many leptons the event
+# has (see cuts.py). The (pT, eta) map is filled from every selected lepton in
+# turn, with the loop in plotFake.py over the SelLep_* arrays: nothing here
+# picks a probe index, because picking one biases the numerator against the
+# denominator.
+#
+# Everything that might become a cut later is an alias, hence a branch in the
+# snapshot, so mjj / detajj / njet / b-tag variations are a re-run of
+# plotFake.py on the same ntuple rather than new jobs.
+# ===========================================================================
+
+# prompt gen-matching per selected lepton, for the subtraction. Per lepton and
+# not per event: which lepton is prompt is exactly what the loop needs.
+aliases['SelLep_promptgenmatched'] = {
+    'expr': 'Take(ROOT::VecOps::RVec<int>(Lepton_promptgenmatched), nLepSel)',
+    'samples': mc
+}
+
+# -------- the pair, when there are two
+aliases['isSS'] = {
+    'expr': 'nLepSel == 2 && SelLep_pdgId[0] * SelLep_pdgId[1] > 0',
+    'samples': ALL
+}
+aliases['isEE'] = {
+    'expr': 'nLepSel == 2 && abs(SelLep_pdgId[0]) == 11 && abs(SelLep_pdgId[1]) == 11',
+    'samples': ALL
+}
+aliases['dR_ll'] = {
+    'expr': ('nLepSel == 2'
+             ' ? sqrt(pow(SelLep_eta[0] - SelLep_eta[1], 2)'
+             '      + pow(ROOT::VecOps::DeltaPhi(SelLep_phi[0], SelLep_phi[1]), 2))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# -------- b tagging at two working points
+# Kept as branches, not folded into the region, so the choice of working point
+# stays open downstream. The loose WP has the *lowest* discriminant threshold,
+# so it tags the most jets and gives the strongest veto; medium is the weaker
+# veto and therefore the larger sample. Dumping without either applied means
+# both are still reachable.
+for _wpname in ('loose', 'medium'):
+    _thr = btagging_WPs[bAlgo][_wpname]
+    aliases['nBJet_' + _wpname] = {
+        'expr': (f'Sum(CleanJet_pt > 20. && abs(CleanJet_eta) < 2.5'
+                 f'    && Take(Jet_btag{bAlgo}, CleanJet_jetIdx, -999.f) > {_thr})'),
+        'samples': ALL
+    }
+    aliases['bVeto_' + _wpname] = {
+        'expr': 'nBJet_%s == 0' % _wpname,
+        'samples': ALL
+    }
+
+# -------- opposite sign, same flavour: the DY region for the prompt rate
+aliases['isOS'] = {
+    'expr': 'nLepSel == 2 && SelLep_pdgId[0] * SelLep_pdgId[1] < 0',
+    'samples': ALL
+}
+aliases['isSF'] = {
+    'expr': 'nLepSel == 2 && abs(SelLep_pdgId[0]) == abs(SelLep_pdgId[1])',
+    'samples': ALL
+}
+
+# -------- mT of the leading lepton, used only by the 1-lepton branch, where
+# W -> l nu is the prompt background that dominates.
+aliases['mt_l0'] = {
+    'expr': ('nLepSel > 0'
+             ' ? sqrt(2.f * SelLep_pt[0] * PuppiMET_pt'
+             '      * (1.f - cos(ROOT::VecOps::DeltaPhi(SelLep_phi[0], PuppiMET_phi))))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# -------- away jets, away from every selected lepton
+# CleanJet already drops jets overlapping a lepton, but at a smaller radius
+# than the 0.7 that separates a recoil jet from the fake's own parent jet.
+# Three thresholds as branches and *not* as a requirement in cuts.py: the
+# region is inclusive, and requiring an away jet -- or moving its threshold --
+# is a selection applied downstream on this tree.
+for _thr in (20, 30, 40):
+    aliases['nAwayJet%d' % _thr] = {
+        'expr': (
+            'Sum(CleanJet_pt > %d.f && abs(CleanJet_eta) < 5.0'
+            '    && (nLepSel < 1 || sqrt(pow(CleanJet_eta - SelLep_eta[0], 2)'
+            '          + pow(ROOT::VecOps::DeltaPhi(CleanJet_phi, SelLep_phi[0]), 2)) > 0.7)'
+            '    && (nLepSel < 2 || sqrt(pow(CleanJet_eta - SelLep_eta[1], 2)'
+            '          + pow(ROOT::VecOps::DeltaPhi(CleanJet_phi, SelLep_phi[1]), 2)) > 0.7))'
+            % _thr),
+        'samples': ALL
+    }
+
+
+# ===========================================================================
+# Extra variables, dumped and not cut on.
+#
+# Everything below exists so that the parameterisation of the rate can be
+# revisited on the ntuple instead of on nanoAOD. The reason to want them is
+# that f(pT, eta) is only the first approximation: the rate depends on how the
+# fake was produced, and the variables that carry that information are the
+# proximity and the hardness of the parent jet, the hadronic activity and the
+# pileup. If f turns out to depend on one of them, it becomes a third binning
+# dimension -- or the evidence that the measurement region and the application
+# region have to be reweighted to agree in it.
+# ===========================================================================
+
+# -------- per-lepton jet proximity, the two strongest variables after pT
+#
+# A lepton faked by a jet keeps the remnant of its parent jet nearby, so dR to
+# the closest jet and pT(lepton)/pT(jet) separate fakes from prompt leptons
+# more sharply than anything else available here. Aligned with SelLep_*, one
+# entry per selected lepton, -1 when the event has no jet above threshold.
+for _thr in (20, 30):
+    aliases['SelLep_drClosestJet%d' % _thr] = {
+        'function' : 'closestJetDR_%d' % _thr,
+        'variables': ['SelLep_eta', 'SelLep_phi',
+                      'CleanJet_pt', 'CleanJet_eta', 'CleanJet_phi'],
+        'external' : '../../utils/macros/fake_rate_vars.cc',
+        'linesToGlobal': ['closestJetDR closestJetDR_%d(%d.f);' % (_thr, _thr)],
+        'samples'  : ALL,
+    }
+    aliases['SelLep_ptClosestJet%d' % _thr] = {
+        'function' : 'closestJetPt_%d' % _thr,
+        'variables': ['SelLep_eta', 'SelLep_phi',
+                      'CleanJet_pt', 'CleanJet_eta', 'CleanJet_phi'],
+        'external' : '../../utils/macros/fake_rate_vars.cc',
+        'linesToGlobal': ['closestJetPt closestJetPt_%d(%d.f);' % (_thr, _thr)],
+        'samples'  : ALL,
+    }
+    # pT(lepton) / pT(closest jet). Division by the -1 sentinel is harmless --
+    # 'where' discards that branch -- but it must not be a 0.
+    aliases['SelLep_ptRatioJet%d' % _thr] = {
+        'expr': ('ROOT::VecOps::Where(SelLep_ptClosestJet{t} > 0.f,'
+                 ' SelLep_pt / SelLep_ptClosestJet{t}, -1.f)').format(t=_thr),
+        'samples': ALL
+    }
+
+# -------- per-lepton MET geometry
+# mT per lepton, not only for the leading one: in the 2-lepton branch it is a
+# diagnostic rather than a cut (see cuts.py), and it is cheap to keep.
+aliases['SelLep_mt'] = {
+    'expr': ('sqrt(2.f * SelLep_pt * PuppiMET_pt'
+             ' * (1.f - cos(ROOT::VecOps::DeltaPhi(SelLep_phi, (float)PuppiMET_phi))))'),
+    'samples': ALL
+}
+aliases['SelLep_dphiMET'] = {
+    'expr': 'abs(ROOT::VecOps::DeltaPhi(SelLep_phi, (float)PuppiMET_phi))',
+    'samples': ALL
+}
+
+# -------- the pair, beyond mll and dR_ll
+aliases['ptll'] = {
+    'expr': ('nLepSel == 2'
+             ' ? (float)sqrt(pow(SelLep_pt[0] * cos(SelLep_phi[0])'
+             '                 + SelLep_pt[1] * cos(SelLep_phi[1]), 2)'
+             '             + pow(SelLep_pt[0] * sin(SelLep_phi[0])'
+             '                 + SelLep_pt[1] * sin(SelLep_phi[1]), 2))'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['dphi_ll'] = {
+    'expr': ('nLepSel == 2'
+             ' ? (float)abs(ROOT::VecOps::DeltaPhi(SelLep_phi[0], SelLep_phi[1]))'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['deta_ll'] = {
+    'expr': 'nLepSel == 2 ? (float)abs(SelLep_eta[0] - SelLep_eta[1]) : -1.f',
+    'samples': ALL
+}
+
+# -------- hadronic activity
+# njet* counts every jet above threshold, with no dR requirement, so the pair
+# (njet20, nAwayJet20) says how much of the activity is the leptons' own.
+for _thr in (20, 30, 40):
+    aliases['njet%d' % _thr] = {
+        'expr': 'Sum(CleanJet_pt > %d.f && abs(CleanJet_eta) < 5.0)' % _thr,
+        'samples': ALL
+    }
+
+aliases['ht_jets'] = {
+    'expr': 'Sum(CleanJet_pt[CleanJet_pt > 20.f && abs(CleanJet_eta) < 5.0])',
+    'samples': ALL
+}
+
+# Leading-jet kinematics as scalars, so no array indexing is needed downstream.
+for _i in (0, 1):
+    aliases['jet%d_pt' % _i] = {
+        'expr': 'CleanJet_pt.size() > %d ? CleanJet_pt[%d] : -1.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['jet%d_eta' % _i] = {
+        'expr': 'CleanJet_eta.size() > %d ? CleanJet_eta[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+
+aliases['dphijj'] = {
+    'expr': ('CleanJet_pt.size() > 1'
+             ' ? (float)abs(ROOT::VecOps::DeltaPhi(CleanJet_phi[0], CleanJet_phi[1]))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# Smallest dphi between the MET and any jet: the handle on MET that is really
+# jet mismeasurement rather than a neutrino, which is what populates the
+# low-MET tail of the QCD region.
+aliases['mindphi_MET_jet'] = {
+    'expr': ('Sum(CleanJet_pt > 20.f) > 0'
+             ' ? (float)ROOT::VecOps::Min('
+             '     abs(ROOT::VecOps::DeltaPhi('
+             '       CleanJet_phi[CleanJet_pt > 20.f], (float)PuppiMET_phi)))'
+             ' : -1.f'),
+    'samples': ALL
+}
