@@ -855,6 +855,47 @@ for _i, _l in ((2, 'l3'), (3, 'l4')):
         'samples': ALL
     }
 
+# ------------------------------------------------
+# Angular variables
+#
+# The observable the measurement is defined by is cos(theta*), the polar angle
+# of the charged lepton in its own W rest frame against the W flight
+# direction: (1 - cos^2 theta*) for a longitudinal W, (1 -+ cos theta*)^2 for
+# a transverse one.
+#
+# It is NOT here, and not by oversight. Two neutrinos are six unknowns; MET
+# gives two constraints and m(l nu) = m_W on each W gives two more, so four
+# constraints for six unknowns leave a two-parameter family -- not a discrete
+# two-fold ambiguity that could be resolved by a choice. Closing those two
+# degrees of freedom is a prescription, and a prescription that is still being
+# chosen must not be frozen into the ntuple. The ingredients are dumped
+# instead (both leptons, MET as px/py) and the solving is done offline, where
+# changing it costs a re-read and not a resubmission.
+#
+# What is below is what the *visible* objects can give. See
+# computeLeptonAngles in VBS_functions.cpp for the derivations.
+#   [0] Collins-Soper polar angle of the pair -- the standard substitute when
+#       the helicity frame is out of reach, built to be insensitive to the
+#       unknown longitudinal boost
+#   [1] helicity angle of the pair: the same construction as cos(theta*) but
+#       for the ll system instead of each W
+#   [2] cos(theta*) in the collinear approximation -- crude, and here as the
+#       baseline an offline solver has to beat
+#
+# The gen-level truth angles, which stage 3 regresses onto, are built offline
+# from the LHEPart_* branches: no C++ here, so an absent LHE record costs the
+# truth target and not a crashed job.
+# ------------------------------------------------
+aliases['lep_angles'] = {
+    'function' : 'computeLeptonAngles',
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId'],
+    'external' : '../utils/macros/VBS_functions.cpp',
+    'samples'  : ALL
+}
+aliases['dnn_cosThetaCS']     = {'expr': 'lep_angles[0]', 'samples': ALL}
+aliases['dnn_cosThetaHel']    = {'expr': 'lep_angles[1]', 'samples': ALL}
+aliases['dnn_cosThetaStarApprox'] = {'expr': 'lep_angles[2]', 'samples': ALL}
+
 ###############################################################################
 #                                                                             #
 #  is_<region> -- analysis-region membership, as branches                      #

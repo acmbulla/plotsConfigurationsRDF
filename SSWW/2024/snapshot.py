@@ -231,6 +231,14 @@ _dnn_pair = [
     'dnn_drll',
     'dnn_etall',
     'dnn_ptAsymll',
+    # angular structure of the pair. cos(theta*) of each W against its own
+    # flight direction -- the observable the measurement is defined by -- is
+    # NOT here: two neutrinos leave two unresolved degrees of freedom even
+    # after MET and both m(l nu) = m_W, so it is a prescription and it is made
+    # offline. See computeLeptonAngles in VBS_functions.cpp.
+    'dnn_cosThetaCS',
+    'dnn_cosThetaHel',
+    'dnn_cosThetaStarApprox',
 ]
 
 # MET and the transverse WW system

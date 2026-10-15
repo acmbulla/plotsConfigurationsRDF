@@ -322,4 +322,100 @@ float mT2(
 }
 
 
+//
+// computeLeptonAngles -- the angular variables that survive the two neutrinos
+//
+// What the polarisation measurement actually wants is cos(theta*): the polar
+// angle of the charged lepton in its W rest frame, measured against the W
+// flight direction. It goes as (1 - cos^2 theta*) for a longitudinal W and as
+// (1 -+ cos theta*)^2 for a transverse one, and it is THE observable the LL
+// fraction is defined by.
+//
+// It is not reconstructable here, and the reason is a counting, not a
+// resolution problem. Two neutrinos are six unknowns. MET gives two
+// constraints and m(l nu) = m_W on each W gives two more: four constraints
+// for six unknowns, so what is left is a two-parameter family, not a discrete
+// ambiguity. (Dileptonic ttbar looks like the same problem and is solvable
+// only because the two top mass constraints bring the count to six.) Closing
+// those two degrees of freedom is a *prescription* -- minimise the |pz| of
+// the pair, take each neutrino collinear with its lepton, maximise a
+// likelihood -- and a prescription belongs offline, where it can be changed
+// without resubmitting, not frozen into the ntuple. snapshot.py therefore
+// dumps both leptons and MET as px/py and leaves the solving to python.
+//
+// What IS computable from the visible objects alone is the angular structure
+// of the dilepton system, which is the standard substitute when the helicity
+// frame of each W is out of reach. This returns:
+//
+//   [0] cosThetaCS  Collins-Soper polar angle of the pair. The CS axis
+//                   bisects the two beam directions in the pair rest frame,
+//                   which is what makes it insensitive to the unknown
+//                   longitudinal boost -- the whole reason the frame exists.
+//                   Closed form in lab quantities, no boost needed.
+//   [1] cosThetaHel cos of the angle between the leading lepton and the pair
+//                   flight direction, in the pair rest frame. The direct
+//                   analogue of cos(theta*) one level up: the decay angle of
+//                   the ll system instead of of each W.
+//   [2] cosThetaStarApprox  cos(theta*) of the leading lepton in the
+//                   collinear approximation, i.e. assuming each W is boosted
+//                   enough that its neutrino follows its lepton, so the W
+//                   direction is the lepton direction and the only unknown
+//                   left is the energy sharing. Crude, and it degrades badly
+//                   at low W pT; it is here as the baseline that an offline
+//                   solver has to beat, not as a recommended input.
+//
+// Returns -9999 unless there are exactly two leptons, as every other function
+// in this file does.
+//
+ROOT::RVec<float> computeLeptonAngles(
+    const ROOT::RVec<float>& pt,
+    const ROOT::RVec<float>& eta,
+    const ROOT::RVec<float>& phi,
+    const ROOT::RVec<int>&   pdgId
+) {
+    if ((int)pt.size() != 2) return {-9999.f, -9999.f, -9999.f};
+
+    TLorentzVector l1, l2;
+    l1.SetPtEtaPhiM(pt[0], eta[0], phi[0], lepton_mass(pdgId[0]));
+    l2.SetPtEtaPhiM(pt[1], eta[1], phi[1], lepton_mass(pdgId[1]));
+    TLorentzVector ll = l1 + l2;
+
+    const double m  = ll.M();
+    const double qT = ll.Pt();
+    if (m <= 0.) return {-9999.f, -9999.f, -9999.f};
+
+    // ---- Collins-Soper, closed form in lab quantities
+    const double r2  = std::sqrt(2.);
+    const double P1p = (l1.E() + l1.Pz()) / r2;
+    const double P1m = (l1.E() - l1.Pz()) / r2;
+    const double P2p = (l2.E() + l2.Pz()) / r2;
+    const double P2m = (l2.E() - l2.Pz()) / r2;
+
+    double cosCS = 2. * (P1p * P2m - P1m * P2p) / (m * std::sqrt(m * m + qT * qT));
+    // the CS z axis is oriented along the pair's own longitudinal motion
+    if (ll.Pz() < 0.) cosCS = -cosCS;
+
+    // ---- helicity angle of the pair
+    double cosHel = -9999.;
+    if (ll.Vect().Mag() > 0.) {
+        TLorentzVector l1s = l1;
+        l1s.Boost(-ll.BoostVector());
+        if (l1s.Vect().Mag() > 0.)
+            cosHel = l1s.Vect().Unit().Dot(ll.Vect().Unit());
+    }
+
+    // ---- collinear approximation
+    const double mW  = 80.377;
+    const double dot = l1.Dot(ll);
+    double cosApprox = -9999.;
+    if (dot > 0.) {
+        cosApprox = 1. - mW * mW / dot;
+        if (cosApprox >  1.) cosApprox =  1.;
+        if (cosApprox < -1.) cosApprox = -1.;
+    }
+
+    return {(float)cosCS, (float)cosHel, (float)cosApprox};
+}
+
+
 #endif // VBS_FUNCTIONS_H
