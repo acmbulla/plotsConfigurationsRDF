@@ -148,13 +148,13 @@ _weights = [
 # envelope convention (9-point vs 7-point, Hessian vs replica) is exactly the
 # kind of thing that gets revised after the jobs have run.
 #
-# The _vec aliases exist in aliases.py for `lhesamples` only; the raw branches
-# are listed too so the samples outside that set keep whatever they have.
+# The _vec aliases of aliases.py are deliberately NOT here. They are the same
+# numbers cast to RVec<double>, which the shape machinery wants and nothing
+# offline does -- and measured on one job they were 136 MB of the 644, i.e.
+# 21% of the output spent on a duplicate. Cast them in python instead.
 _theory = [
     'LHEScaleWeight',
     'LHEPdfWeight',
-    'LHEScaleWeight_vec',
-    'LHEPdfWeight_vec',
     'PSWeight',             # ISR/FSR, 4 entries
     'LHEReweightingWeight',
     'Top_pTrw',
