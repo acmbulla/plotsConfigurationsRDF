@@ -499,3 +499,331 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 #   'xmlfile'  : 'code/TMVAClassification_BDTG.weights.xml',
 #   'samples': ALL
 # }
+
+###############################################################################
+#                                                                             #
+#  DNN training block (branch DNNTraining)                                    #
+#                                                                             #
+#  Everything below exists only to be dumped by snapshot.py into the flat      #
+#  ntuple the polarisation classifier is trained on. Nothing here is used by    #
+#  cuts.py, variables.py or nuisances.py, so mkShapes is unaffected: the        #
+#  aliases are Define()d and never read.                                        #
+#                                                                             #
+#  Two rules the rest of this file already follows, repeated because they bite  #
+#  hardest here:                                                                #
+#                                                                             #
+#  1. Aliases are emitted in *insertion order* with no topological sort         #
+#     (analysisFactory._build_aliases_ordered). This block is appended last, so  #
+#     it may use anything above it; inside it, order matters.                    #
+#                                                                             #
+#  2. An alias whose 'expr' touches a branch the sample does not have fails at   #
+#     Define() time and kills the job -- it is NOT silently dropped the way a    #
+#     missing *dump* column is. So every gen-level alias is restricted to `mc`   #
+#     and every LHE one to `lhesamples`.                                         #
+#                                                                             #
+###############################################################################
+
+# ------------------------------------------------
+# Scalar lepton kinematics
+#
+# SelLep_* are the pT-ordered leptons above 10 GeV (see the top of this file).
+# The DNN wants a fixed-width flat row, not a jagged array, so each of the two
+# same-sign leptons is unrolled into scalars. The guards return a sentinel
+# rather than reading out of range: the DNN_train region pins nLepSel == 2, but
+# these aliases are defined for every event the supercut lets through.
+# ------------------------------------------------
+for _i, _l in ((0, 'l1'), (1, 'l2')):
+    aliases['dnn_%s_pt' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_pt[%d] : -1.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_eta' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_eta[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_phi' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_phi[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_pdgId' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_pdgId[%d] : 0' % (_i, _i),
+        'samples': ALL
+    }
+
+# Charge of the same-sign pair. The LL fraction is not charge symmetric at the
+# LHC (W+W+ and W-W- have different parton luminosities and different
+# longitudinal fractions), so this is a genuine input, not bookkeeping.
+aliases['dnn_lep_charge'] = {
+    'expr': 'nLepSel > 0 ? (SelLep_pdgId[0] > 0 ? -1 : 1) : 0',
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# The dilepton system
+#
+# dphill and detall are the classic LL discriminants in SSWW: the longitudinal
+# W pair gives leptons that are closer in the transverse plane and more
+# central, because the decay of a longitudinal W pushes the charged lepton
+# along the W direction rather than against it.
+# ------------------------------------------------
+aliases['dnn_ptll'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)sqrt(pow(SelLep_pt[0]*cos(SelLep_phi[0]) + SelLep_pt[1]*cos(SelLep_phi[1]), 2)'
+             '             + pow(SelLep_pt[0]*sin(SelLep_phi[0]) + SelLep_pt[1]*sin(SelLep_phi[1]), 2))'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_dphill'] = {
+    'expr': 'nLepSel > 1 ? (float)abs(ROOT::VecOps::DeltaPhi(SelLep_phi[0], SelLep_phi[1])) : -1.f',
+    'samples': ALL
+}
+aliases['dnn_detall'] = {
+    'expr': 'nLepSel > 1 ? (float)abs(SelLep_eta[0] - SelLep_eta[1]) : -1.f',
+    'samples': ALL
+}
+aliases['dnn_drll'] = {
+    'expr': 'nLepSel > 1 ? (float)sqrt(pow(dnn_detall, 2) + pow(dnn_dphill, 2)) : -1.f',
+    'samples': ALL
+}
+aliases['dnn_etall'] = {
+    'expr': 'nLepSel > 1 ? (float)(SelLep_eta[0] + SelLep_eta[1]) / 2.f : -99.f',
+    'samples': ALL
+}
+# pT asymmetry of the pair. For a longitudinal pair the two leptons share the
+# energy more evenly than for a transverse one.
+aliases['dnn_ptAsymll'] = {
+    'expr': ('nLepSel > 1 && (SelLep_pt[0] + SelLep_pt[1]) > 0.f'
+             ' ? (float)(SelLep_pt[0] - SelLep_pt[1]) / (SelLep_pt[0] + SelLep_pt[1])'
+             ' : -9.f'),
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# MET and the transverse WW system
+#
+# The two neutrinos are not separable from PuppiMET alone; the DNN gets the
+# transverse projections and the full lepton kinematics and may learn whatever
+# of the longitudinal information survives. Stage 3 (the neutrino solving) is
+# done offline in python from exactly these branches plus dnn_l{1,2}_*, which
+# is why MET is dumped as px/py as well as pt/phi -- no trigonometry needed on
+# the python side and no ambiguity about the phi convention.
+# ------------------------------------------------
+aliases['dnn_met_px'] = {'expr': '(float)(PuppiMET_pt * cos(PuppiMET_phi))', 'samples': ALL}
+aliases['dnn_met_py'] = {'expr': '(float)(PuppiMET_pt * sin(PuppiMET_phi))', 'samples': ALL}
+
+aliases['dnn_dphi_llMET'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)abs(ROOT::VecOps::DeltaPhi('
+             '     (float)atan2(SelLep_pt[0]*sin(SelLep_phi[0]) + SelLep_pt[1]*sin(SelLep_phi[1]),'
+             '                  SelLep_pt[0]*cos(SelLep_phi[0]) + SelLep_pt[1]*cos(SelLep_phi[1])),'
+             '     (float)PuppiMET_phi))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# mT of the whole WW system, treating the dilepton as one visible object.
+aliases['dnn_mTww'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)sqrt(2.f * dnn_ptll * PuppiMET_pt * (1.f - cos(dnn_dphi_llMET)))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# Smallest dphi between MET and any jet above 20 GeV: separates a real
+# neutrino from jet mismeasurement, which is what the nonprompt background
+# looks like at low MET.
+aliases['dnn_mindphi_METjet'] = {
+    'expr': ('Sum(CleanJet_pt > 20.f) > 0'
+             ' ? (float)ROOT::VecOps::Min('
+             '     abs(ROOT::VecOps::DeltaPhi(CleanJet_phi[CleanJet_pt > 20.f], (float)PuppiMET_phi)))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# The VBS tagging jets
+#
+# CleanJet_* is pT ordered, and the supercut already requires two jets above
+# 50 GeV, so j1/j2 are the tagging pair by the analysis definition. The
+# *leading-mjj* pair would be a different choice; it is not made here, because
+# changing it must not mean re-running the jobs -- CleanJet_* is dumped whole
+# below so the alternative pairing can be built offline.
+# ------------------------------------------------
+for _i, _j in ((0, 'j1'), (1, 'j2'), (2, 'j3')):
+    aliases['dnn_%s_pt' % _j] = {
+        'expr': 'CleanJet_pt.size() > %d ? CleanJet_pt[%d] : -1.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_eta' % _j] = {
+        'expr': 'CleanJet_eta.size() > %d ? CleanJet_eta[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_phi' % _j] = {
+        'expr': 'CleanJet_phi.size() > %d ? CleanJet_phi[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_mass' % _j] = {
+        'expr': ('CleanJet_pt.size() > %d'
+                 ' ? Take(Jet_mass, CleanJet_jetIdx, -1.f)[%d] : -1.f' % (_i, _i)),
+        'samples': ALL
+    }
+
+aliases['dnn_dphijj'] = {
+    'expr': ('CleanJet_pt.size() > 1'
+             ' ? (float)abs(ROOT::VecOps::DeltaPhi(CleanJet_phi[0], CleanJet_phi[1])) : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_drjj'] = {
+    'expr': ('CleanJet_pt.size() > 1'
+             ' ? (float)sqrt(pow(CleanJet_eta[0] - CleanJet_eta[1], 2) + pow(dnn_dphijj, 2)) : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_ptjj'] = {
+    'expr': ('CleanJet_pt.size() > 1'
+             ' ? (float)sqrt(pow(CleanJet_pt[0]*cos(CleanJet_phi[0]) + CleanJet_pt[1]*cos(CleanJet_phi[1]), 2)'
+             '             + pow(CleanJet_pt[0]*sin(CleanJet_phi[0]) + CleanJet_pt[1]*sin(CleanJet_phi[1]), 2))'
+             ' : -1.f'),
+    'samples': ALL
+}
+# Sign of eta_j1 * eta_j2: VBS puts the two tagging jets in opposite
+# hemispheres, QCD-induced production does not.
+aliases['dnn_etaProdjj'] = {
+    'expr': 'CleanJet_pt.size() > 1 ? (float)(CleanJet_eta[0] * CleanJet_eta[1]) : -99.f',
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# Zeppenfeld / centrality
+#
+# zstar_max is already defined above (the analysis cut variable). These are the
+# per-object versions the DNN can use without the max() collapsing them, plus
+# the Zeppenfeld of a third jet, which is the central-jet-veto information in
+# continuous form.
+# ------------------------------------------------
+aliases['dnn_zepp_l1'] = {
+    'expr': ('nLepSel > 0 && CleanJet_pt.size() > 1 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(SelLep_eta[0] - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_zepp_l2'] = {
+    'expr': ('nLepSel > 1 && CleanJet_pt.size() > 1 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(SelLep_eta[1] - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_zepp_ll'] = {
+    'expr': ('nLepSel > 1 && CleanJet_pt.size() > 1 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(dnn_etall - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['dnn_zepp_j3'] = {
+    'expr': ('CleanJet_pt.size() > 2 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(CleanJet_eta[2] - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+# R_pT: the standard VBS balance variable.
+aliases['dnn_Rpt'] = {
+    'expr': ('nLepSel > 1 && CleanJet_pt.size() > 1'
+             ' ? (float)(SelLep_pt[0]*SelLep_pt[1]) / (float)(CleanJet_pt[0]*CleanJet_pt[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# Hadronic activity and b tagging
+#
+# bVeto / bReq are booleans above; the DNN gets the counts instead, so the
+# working point stays changeable downstream.
+# ------------------------------------------------
+for _thr in (20, 30, 50):
+    aliases['dnn_njet%d' % _thr] = {
+        'expr': 'Sum(CleanJet_pt > %d.f && abs(CleanJet_eta) < 5.0)' % _thr,
+        'samples': ALL
+    }
+aliases['dnn_ht_jets'] = {
+    'expr': 'Sum(CleanJet_pt[CleanJet_pt > 20.f && abs(CleanJet_eta) < 5.0])',
+    'samples': ALL
+}
+aliases['dnn_nbjet'] = {
+    'expr': (f'Sum(CleanJet_pt > 20. && abs(CleanJet_eta) < 2.5'
+             f' && Take(Jet_btag{bAlgo}, CleanJet_jetIdx, -999.f) > {bWP})'),
+    'samples': ALL
+}
+# The largest b-tag discriminant among the central jets, so the WP itself can
+# be moved offline rather than being frozen into the ntuple.
+aliases['dnn_maxbtag'] = {
+    'expr': (f'Sum(CleanJet_pt > 20. && abs(CleanJet_eta) < 2.5) > 0'
+             f' ? (float)ROOT::VecOps::Max('
+             f'     Take(Jet_btag{bAlgo}, CleanJet_jetIdx, -999.f)'
+             f'     [CleanJet_pt > 20. && abs(CleanJet_eta) < 2.5])'
+             f' : -1.f'),
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# Lepton-jet geometry
+#
+# dr_lj / m_lj above give the four (lepton, jet) combinations as arrays; these
+# are the two that matter for the nonprompt background, as scalars.
+# ------------------------------------------------
+aliases['dnn_drl1j_min'] = {
+    'expr': 'nLepSel > 0 && CleanJet_pt.size() > 1 ? (float)std::min(dr_lj[0], dr_lj[1]) : -1.f',
+    'samples': ALL
+}
+aliases['dnn_drl2j_min'] = {
+    'expr': 'nLepSel > 1 && CleanJet_pt.size() > 1 ? (float)std::min(dr_lj[2], dr_lj[3]) : -1.f',
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# Weight decomposition -- the INFERNO ingredients
+#
+# my_sample_weight (added automatically by mkSnapshot) is the product of
+# everything. INFERNO needs the *factors* separately, because the loss has to
+# re-weight an event under a shifted nuisance without re-running the jobs: a
+# single collapsed number cannot be un-multiplied. Each factor below is dumped
+# as its own branch so the varied weight is
+#     w_shifted = my_sample_weight / f_nominal * f_shifted
+# computed in python.
+#
+# The btagSF*_{up,down}_{correlated,uncorrelated} aliases already exist above,
+# built from `shifts_needed`; they are simply listed in snapshot.py. If a
+# nuisance is wanted that is not in `shifts_needed`, add the shift there first
+# or the alias will not exist and the column will be silently dropped from the
+# dump (see snapshot.py).
+# ------------------------------------------------
+aliases['dnn_w_xs']     = {'expr': 'XSWeight',    'samples': mc}
+aliases['dnn_w_sf']     = {'expr': 'SFweight',    'samples': mc}
+aliases['dnn_w_lepsf']  = {'expr': 'LepWPSFN',    'samples': mc}
+aliases['dnn_w_lepcut'] = {'expr': 'LepWPCutN',   'samples': ALL}
+aliases['dnn_w_glob']   = {'expr': 'SFweightNl',  'samples': mc}
+aliases['dnn_w_match']  = {'expr': 'PromptGenLepMatchN', 'samples': mc}
+
+# ------------------------------------------------
+# Gen-level truth for the polarisation target
+#
+# Stages 0 and 1 do not need any of this: the LL / TL / TT label is the *sample*
+# the event came from (VBS_SSWW_WWCM_LL / _TL / _TT), and the sample name is in
+# the output file name, not in the tree -- see snapshot.py.
+#
+# Stage 3 does need it: reconstructing the W decay and checking the
+# reconstruction against truth requires the gen W bosons and the gen leptons.
+# LHEPart_* is the cheapest handle (a handful of entries, the hard-process
+# final state) and is enough to build both W four-momenta and cos(theta*).
+#
+# UNVERIFIED: no file was opened to confirm these branches survive the latino
+# skim. Check before submitting -- see the recipe at the bottom of snapshot.py.
+# A missing branch here is harmless (the dump drops unknown columns silently)
+# but it means stage 3 has no truth, which you would only find out much later.
+# ------------------------------------------------
+# No alias is defined over LHEPart_*: an alias touching a branch that is not
+# there is a crash, while a *dump column* that is not there is silently
+# dropped. So the LHE block is listed as raw branch names in snapshot.py,
+# which fails soft, and the four-vector algebra is done offline in python.

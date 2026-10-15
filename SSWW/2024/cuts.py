@@ -292,3 +292,47 @@ cuts['ZZ_VR'] = {
     #     'mmmm' : 'mmmm',
     # }
 }
+
+# ------------------------------------------------
+# DNN_train -- the region the training ntuple is dumped from
+# (branch DNNTraining; used by snapshot.py, not by mkShapes)
+#
+# This is deliberately *looser* than WW_SR and a superset of it, of
+# nonprompt_CR and of both WW_VR_*. Every cut that WW_SR applies and this one
+# does not is dumped as a branch instead, so the selection can be retuned --
+# or handed to the network as an input -- without re-reading nanoAOD. That is
+# the whole point of snapshotting rather than histogramming.
+#
+# Dropped with respect to WW_SR, and why:
+#   PuppiMET_pt > 30   -> dumped as dnn_met_*; MET is an input, and the
+#                         nonprompt background lives at low MET
+#   bVeto              -> dumped as dnn_nbjet / dnn_maxbtag, so the b working
+#                         point stays free
+#   zstar_max < 0.75   -> dumped as zstar_max and the per-object dnn_zepp_*
+#   detajj > 2.5       -> dumped as detajj
+#   Z veto in ee       -> dumped as mll plus the flavour flags
+#
+# Kept, and why:
+#   nLepSel == 2       -> the 2-lepton branch is what this classifier is for;
+#                         WZ/ZZ are a different network with different inputs
+#   same sign          -> opposite-sign is a different analysis entirely, and
+#                         keeping it would multiply the ntuple by the DY+top yield
+#   Lepton_pt[1] > 20  -> below this the trigger and the fake rate are not
+#                         measured, so the events could not be used anyway
+#   mll > 20           -> the low-mass resonance region, never used
+#   mjj > 200          -> the loosest mjj any planned region uses (WW_VR_*);
+#                         without it the QCD-induced tail dominates the file size
+#
+# Note the Lepton_pt[1] index: the supercut only guarantees one lepton in the
+# collection, so this term is safe only because nLepSel == 2 is evaluated
+# first and && short-circuits left to right.
+# ------------------------------------------------
+cuts['DNN_train'] = {
+    'expr': (
+        'nLepSel == 2'
+        ' && Lepton_pt[1] > 20'
+        ' && (ee || mumu || emu)'
+        ' && mll > 20'
+        ' && mjj > 200'
+    ),
+}
