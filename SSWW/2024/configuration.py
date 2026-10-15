@@ -44,3 +44,12 @@ outputDirDatacard = 'datacards/' + tagger
 
 scripts_run_folder    = "${MY_PATH_JOBS}/2024/"+tag+"_"+tagger+"/run_scripts"
 script_batch_location = "${MY_PATH_JOBS}/2024/"+tag+"_"+tagger+"/batch_scripts"
+
+# mkSnapshot reads its own pair of names, not the two above: snapshot jobs and
+# shape jobs are kept in separate trees so the two never share a directory.
+# Without these mkSnapshot falls back to the relative defaults in
+# SnapshotFactory.__init__ ('scripts_snapshot_run', './scripts_snapshot_batch/')
+# and writes hundreds of job directories into the current working directory --
+# i.e. into this config directory on AFS. Same convention as FakesNum.
+snapshotRunFolder     = "${MY_PATH_JOBS}/2024/"+tag+"_"+tagger+"/run_scripts_snapshot"
+batchScriptLocation   = "${MY_PATH_JOBS}/2024/"+tag+"_"+tagger+"/batch_scripts_snapshot"
