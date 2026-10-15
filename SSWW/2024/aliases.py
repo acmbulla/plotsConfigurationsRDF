@@ -527,10 +527,11 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 # Scalar lepton kinematics
 #
 # SelLep_* are the pT-ordered leptons above 10 GeV (see the top of this file).
-# The DNN wants a fixed-width flat row, not a jagged array, so each of the two
-# same-sign leptons is unrolled into scalars. The guards return a sentinel
-# rather than reading out of range: the DNN_train region pins nLepSel == 2, but
-# these aliases are defined for every event the supercut lets through.
+# The DNN wants a fixed-width flat row, not a jagged array, so each lepton is
+# unrolled into scalars (l3 and l4 further down, for the 3l and 4l branches of
+# DNN_dump). The guards return a sentinel rather than reading out of range:
+# DNN_dump admits 2, 3 and 4 leptons, and these aliases are defined for every
+# event the supercut lets through, whether it ends up in the file or not.
 # ------------------------------------------------
 for _i, _l in ((0, 'l1'), (1, 'l2')):
     aliases['dnn_%s_pt' % _l] = {
@@ -827,3 +828,77 @@ aliases['dnn_w_match']  = {'expr': 'PromptGenLepMatchN', 'samples': mc}
 # there is a crash, while a *dump column* that is not there is silently
 # dropped. So the LHE block is listed as raw branch names in snapshot.py,
 # which fails soft, and the four-vector algebra is done offline in python.
+
+# ------------------------------------------------
+# Third and fourth lepton, as scalars
+#
+# The dump region DNN_dump is the union of the 2l, 3l and 4l branches, so the
+# flat row has to be wide enough for four leptons. Events with fewer get the
+# sentinel, which is what tells the loader to mask these columns rather than
+# treat -1 as a measurement.
+# ------------------------------------------------
+for _i, _l in ((2, 'l3'), (3, 'l4')):
+    aliases['dnn_%s_pt' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_pt[%d] : -1.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_eta' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_eta[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_phi' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_phi[%d] : -99.f' % (_i, _i),
+        'samples': ALL
+    }
+    aliases['dnn_%s_pdgId' % _l] = {
+        'expr': 'nLepSel > %d ? SelLep_pdgId[%d] : 0' % (_i, _i),
+        'samples': ALL
+    }
+
+###############################################################################
+#                                                                             #
+#  is_<region> -- analysis-region membership, as branches                      #
+#                                                                             #
+#  mkSnapshot filters on ONE region per run (cut_to_dump), so DNN_dump is the   #
+#  union of everything in cuts.py and the regions themselves have to travel     #
+#  with the event. Each becomes a boolean column, so the signal region, the     #
+#  control regions and the validation regions are all carved out of the same    #
+#  files offline:                                                               #
+#                                                                             #
+#      sr = df[df.is_WW_SR]                                                     #
+#      cr = df[df.is_nonprompt_CR]                                              #
+#                                                                             #
+#  That is what stage 4 needs: a nuisance-aware likelihood has to hold the      #
+#  control regions that constrain its nuisances, and they must come from the    #
+#  same event sample as the signal region or the correlations are wrong.        #
+#                                                                             #
+#  The expressions are READ FROM `cuts`, not copied. load_config_files()        #
+#  exec's cuts.py before aliases.py and injects the resulting dict here         #
+#  (analysisFactory.py:61-63), so a region edited in cuts.py changes its flag    #
+#  with it and the two cannot drift apart. The same loop also unrolls           #
+#  'categories' into is_<region>_<category>, matching what mkShapes does to      #
+#  the region names, so the flags keep meaning the same thing if the flavour    #
+#  splits in cuts.py are ever uncommented.                                      #
+#                                                                             #
+#  DNN_dump itself is skipped: it is true by construction for every event in    #
+#  the file, so the column would carry no information.                          #
+#                                                                             #
+#  Ordering note: this block is last in aliases.py on purpose. Aliases are      #
+#  emitted in insertion order with no topological sort, and these expressions   #
+#  use zstar_max, mll_Z, pt_Z1, bVeto and the rest, every one of which is       #
+#  defined above.                                                               #
+#                                                                             #
+###############################################################################
+
+_dump_region = 'DNN_dump'
+
+for _cutName, _cut in cuts.items():
+    if _cutName == _dump_region:
+        continue
+    _expr = _cut['expr'] if isinstance(_cut, dict) else _cut
+    aliases['is_' + _cutName] = {'expr': '(' + _expr + ')', 'samples': ALL}
+    for _catName, _cat in (_cut.get('categories', {}) if isinstance(_cut, dict) else {}).items():
+        aliases['is_%s_%s' % (_cutName, _catName)] = {
+            'expr': '(' + _expr + ') && (' + _cat + ')',
+            'samples': ALL
+        }

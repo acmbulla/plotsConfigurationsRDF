@@ -294,45 +294,66 @@ cuts['ZZ_VR'] = {
 }
 
 # ------------------------------------------------
-# DNN_train -- the region the training ntuple is dumped from
+# DNN_dump -- the single region the training ntuple is dumped from
 # (branch DNNTraining; used by snapshot.py, not by mkShapes)
 #
-# This is deliberately *looser* than WW_SR and a superset of it, of
-# nonprompt_CR and of both WW_VR_*. Every cut that WW_SR applies and this one
-# does not is dumped as a branch instead, so the selection can be retuned --
-# or handed to the network as an input -- without re-reading nanoAOD. That is
-# the whole point of snapshotting rather than histogramming.
+# mkSnapshot dumps EXACTLY ONE region per run. cut_to_dump names one key of
+# this dict, _build_cpp_cuts_and_output applies that one Filter, and the
+# Snapshot is taken on that node. There is no list form and no loop: a second
+# region means a second run, with a different cut_to_dump and a different
+# folder_where_to_save_trees.
 #
-# Dropped with respect to WW_SR, and why:
-#   PuppiMET_pt > 30   -> dumped as dnn_met_*; MET is an input, and the
-#                         nonprompt background lives at low MET
-#   bVeto              -> dumped as dnn_nbjet / dnn_maxbtag, so the b working
-#                         point stays free
-#   zstar_max < 0.75   -> dumped as zstar_max and the per-object dnn_zepp_*
-#   detajj > 2.5       -> dumped as detajj
-#   Z veto in ee       -> dumped as mll plus the flavour flags
+# So this region is the UNION of everything in this file, loosened, and the
+# membership of each analysis region travels with the event as an is_<region>
+# branch (generated from this dict at the end of aliases.py -- the cuts dict
+# is injected into the aliases namespace, so there is no second copy of these
+# expressions to keep in sync).
 #
-# Kept, and why:
-#   nLepSel == 2       -> the 2-lepton branch is what this classifier is for;
-#                         WZ/ZZ are a different network with different inputs
-#   same sign          -> opposite-sign is a different analysis entirely, and
-#                         keeping it would multiply the ntuple by the DY+top yield
-#   Lepton_pt[1] > 20  -> below this the trigger and the fake rate are not
-#                         measured, so the events could not be used anyway
-#   mll > 20           -> the low-mass resonance region, never used
-#   mjj > 200          -> the loosest mjj any planned region uses (WW_VR_*);
-#                         without it the QCD-induced tail dominates the file size
+# Three branches, one per lepton multiplicity:
+#
+#   nLepSel == 2, same sign   covers WW_SR, nonprompt_CR, WW_VR_bveto,
+#                             WW_VR_btag
+#   nLepSel == 3              covers WZ_SR, WZb_CR, WZ_VR_bveto, WZ_VR_btag
+#   nLepSel == 4              covers ZZ_VR
+#
+# Kept here rather than dumped as a branch, and why:
+#
+#   mjj > 200          the loosest mjj any region uses (WW_VR_*, WZ_VR_*).
+#                      Without it the QCD-induced tail dominates the file size
+#                      and nothing downstream would ever look at it.
+#   same sign in 2l    opposite-sign is a different analysis, and keeping it
+#                      would add the whole DY and top yield to the ntuple
+#   Lepton_pt[1] > 20  below this the trigger and the fake rate are not
+#                      measured, so the events are unusable anyway
+#   mll > 20           the low-mass resonance region, never used
+#   mlll > 100         as in every 3-lepton region here
+#
+# Dropped with respect to the signal regions, and therefore dumped as a
+# branch instead -- this is the point of snapshotting rather than
+# histogramming, since each of these is either a knob to retune or an input
+# to hand the network:
+#
+#   PuppiMET_pt > 30   -> dnn_met_*; the nonprompt background lives at low MET
+#   bVeto / bReq       -> dnn_nbjet, dnn_maxbtag, so the b working point and
+#                         the bveto/btag split stay free
+#   zstar_max < 0.75   -> zstar_max and the per-object dnn_zepp_*
+#   detajj > 2.5       -> detajj
+#   the Z veto in ee   -> mll plus the flavour flags
+#   the Z window in 3l -> mll_Z
+#   the flavour split  -> ee/mumu/emu, eee/eem/mme/mmm, eeee/eemm/mmmm
 #
 # Note the Lepton_pt[1] index: the supercut only guarantees one lepton in the
-# collection, so this term is safe only because nLepSel == 2 is evaluated
-# first and && short-circuits left to right.
+# collection, so that term is safe only because nLepSel == 2 is evaluated
+# first and && short-circuits left to right. Same for the 3l and 4l branches,
+# which rely on mlll / the ZZ aliases returning -9999 off their multiplicity.
 # ------------------------------------------------
-cuts['DNN_train'] = {
+cuts['DNN_dump'] = {
     'expr': (
-        'nLepSel == 2'
-        ' && Lepton_pt[1] > 20'
-        ' && (ee || mumu || emu)'
-        ' && mll > 20'
-        ' && mjj > 200'
+        'mjj > 200'
+        ' && ('
+        '      (nLepSel == 2 && Lepton_pt[1] > 20 && (ee || mumu || emu) && mll > 20)'
+        '   || (nLepSel == 3 && mlll > 100)'
+        '   ||  nLepSel == 4'
+        ' )'
     ),
 }

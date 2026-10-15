@@ -22,10 +22,24 @@
 #  How mkSnapshot reads this file -- four behaviours that matter
 # ===================================================================
 #
-# 1. ONE REGION PER RUN. cut_to_dump names a single key of cuts.py.
-#    _build_cpp_cuts_and_output applies that one Filter and nothing else, so a
+# 1. ONE REGION PER RUN, AND IT IS MANDATORY. cut_to_dump names a single key
+#    of cuts.py. _build_cpp_cuts_and_output applies that one Filter and
+#    nothing else; there is no list form and no loop over regions, so a
 #    second region means a second run with a different cut_to_dump and a
 #    different folder_where_to_save_trees.
+#
+#    That is why DNN_dump is the *union* of every region in cuts.py and the
+#    regions travel with the event as is_<region> branches, generated from
+#    the cuts dict at the end of aliases.py. The signal region, the control
+#    regions and the validation regions are then carved out of these same
+#    files offline -- which is also what stage 4 needs, since a
+#    nuisance-aware likelihood has to hold the control regions that constrain
+#    its nuisances, drawn from the same events as the signal region.
+#
+#    A cut_to_dump that is not a key of cuts.py does NOT fail here: the
+#    generator prints a warning, emits no Filter, and then still writes
+#    `node_<name>.Snapshot(...)`. The result is C++ that does not compile.
+#    Loud, but at compile time, not at configuration time.
 #
 # 2. COLUMN NAMES ONLY, NOT EXPRESSIONS. Entries are matched against
 #    df.GetColumnNames(). 'Lepton_pt[0]' is not a column and will never
@@ -70,8 +84,8 @@
 # Region and output
 # -------------------------------------------------------------------
 
-# must be a key of cuts.py -- see DNN_train there for what it keeps and drops
-cut_to_dump = 'DNN_train'
+# must be a key of cuts.py -- see DNN_dump there for what it keeps and drops
+cut_to_dump = 'DNN_dump'
 
 folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/snapshot/DNNTraining/2024/'
 
@@ -159,9 +173,53 @@ _theory = [
 _dnn_leptons = [
     'dnn_l1_pt', 'dnn_l1_eta', 'dnn_l1_phi', 'dnn_l1_pdgId',
     'dnn_l2_pt', 'dnn_l2_eta', 'dnn_l2_phi', 'dnn_l2_pdgId',
+    # the 3l and 4l branches of DNN_dump; sentinel when the event has fewer,
+    # which is the loader's cue to mask the column and not to read -1 as a
+    # measurement
+    'dnn_l3_pt', 'dnn_l3_eta', 'dnn_l3_phi', 'dnn_l3_pdgId',
+    'dnn_l4_pt', 'dnn_l4_eta', 'dnn_l4_phi', 'dnn_l4_pdgId',
     'dnn_lep_charge',
     'nLepSel',
     'ee', 'mumu', 'emu',
+    'eee', 'eem', 'mme', 'mmm',
+    'eeee', 'eemm', 'mmmm',
+]
+
+# -------------------------------------------------------------------
+# Region membership
+#
+# One boolean per region of cuts.py, generated from the cuts dict itself at
+# the end of aliases.py -- not copied, so the two cannot drift apart. They are
+# simple 'expr' aliases and so would be auto-added anyway; listed here because
+# they are the reason DNN_dump is a union and not a signal region.
+#
+# There is deliberately no is_DNN_dump: it is true for every event in the
+# file.
+# -------------------------------------------------------------------
+_regions = [
+    'is_WW_SR',
+    'is_nonprompt_CR',
+    'is_WW_VR_bveto',
+    'is_WW_VR_btag',
+    'is_WZ_SR',
+    'is_WZb_CR',
+    'is_WZ_VR_bveto',
+    'is_WZ_VR_btag',
+    'is_ZZ_VR',
+]
+
+# -------------------------------------------------------------------
+# The 3-lepton and 4-lepton systems
+#
+# Needed because DNN_dump covers them: WZ is both a background to the 2l
+# signal region and, through WZ_SR and WZb_CR, the control region that
+# constrains it. The scalars come from the WZ_vars / ZZ_vars function aliases;
+# those two parents are NOT auto-added, but every scalar below is a plain
+# 'expr' over them, so listing the scalars is enough.
+# -------------------------------------------------------------------
+_dnn_3l4l = [
+    'mll_Z', 'mlll', 'pt_W', 'pt_Z1', 'pt_Z2', 'proxyW_W', 'idx_W', 'WZ_flav',
+    'mll_Z1', 'mll_Z2', 'mllll', 'pt_4l_1', 'pt_4l_2', 'ZZ_flav',
 ]
 
 # the pair -- dphill and detall are the classic LL handles
@@ -326,6 +384,8 @@ variables_to_dump = (
     _weights
     + _theory
     + _dnn_leptons
+    + _regions
+    + _dnn_3l4l
     + _dnn_pair
     + _dnn_met
     + _dnn_jets
@@ -383,7 +443,15 @@ variables_to_dump = (
 #   then needs the varied trees matched to the nominal one event by event via
 #   (run, luminosityBlock, event).
 #
-# - The control regions stage 4 wants (nonprompt_CR, WW_VR_*) are separate
-#   cut_to_dump runs into separate folders. DNN_train is already a superset of
-#   nonprompt_CR and of both WW_VR_*, so for those three the split can be done
-#   offline on dnn_nbjet and mjj rather than by re-running.
+# - The 2l, 3l and 4l branches share one flat row, so the per-lepton columns
+#   are ragged in meaning even though they are rectangular on disk. Select on
+#   nLepSel or on the is_<region> flags before feeding anything to a network;
+#   a model trained on all three at once would be learning the multiplicity,
+#   not the polarisation.
+#
+# - DNN_dump is the union of every region in cuts.py as those regions stand
+#   today. If a region is added there that reaches outside it -- an
+#   opposite-sign region, a lower-mjj one, a 1-lepton one -- the flag will be
+#   generated and will simply be false for every event in the file, which is
+#   the one failure mode of this design and is silent. Widen DNN_dump in the
+#   same commit.
