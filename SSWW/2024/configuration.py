@@ -1,8 +1,9 @@
 # example of configuration file
 
-tag = 'WW'
-# tagger = 'WW_260923_test24'
-tagger = '261007_test24'
+tag = 'SSWW'
+# tagger = 'SSWW_260923_test24'
+tagger = '261012_24'
+# tagger = '261014_vdebug3_24'
 
 # used by mkShape to define output directory for root files
 outputDir = 'rootFile/' + tagger
@@ -36,7 +37,7 @@ lumi = 110.11
 
 # used by mkPlot to define output directory for plots
 # different from "outputDir" to do things more tidy
-outputDirPlots = 'plots/' + tagger+"2"
+outputDirPlots = 'plots/' + tagger
 
 # used by mkDatacards to define output directory for datacards
 outputDirDatacard = 'datacards/' + tagger

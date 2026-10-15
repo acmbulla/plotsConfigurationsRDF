@@ -208,9 +208,11 @@ __marimo__/
 
 # ROOT files and output directories
 *.root
-plots/
-rootFile/
-datacards/
+plots
+rootFile
+datacards
+Makefile
+
 
 # Except ROOT files in utils/
-!utils/**/*.root
+!SSWW/utils/**/*.root

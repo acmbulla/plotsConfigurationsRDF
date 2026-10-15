@@ -124,7 +124,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['DY'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 240000,
+#         'MaxEventsPerJob': 240000,
 # }
 
 
@@ -149,7 +149,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['top'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 240000,
+#         'MaxEventsPerJob': 240000,
 # }
 # addSubSampleWeights (samples, 'top', 'TTTo2L2Nu', 'Top_pTrw')
 
@@ -179,7 +179,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['ggWW'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 240000,
+#         'MaxEventsPerJob': 240000,
 # }
 
 # ## TODO: add QCD WW once ready -> just post process existing NanoAOD
@@ -192,7 +192,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['WZ'] = {
 #     'name': files,
 #     'weight': mcCommonWeight + ' * (Gen_ZGstar_mass >= 50)',
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # # ZZ_TuneCP5_13p6TeV_pythia8/
@@ -200,7 +200,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['ZZ'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }    
 
 # ##################
@@ -213,7 +213,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['Zg'] = {
 #     'name': files,
 #     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # # WGtoLNuG-1Jets_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
@@ -221,7 +221,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['Wg'] = {
 #     'name': files,
 #     'weight': mcCommonWeightNoMatch + '*(Gen_ZGstar_mass <= 0)',
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # # DYGto2LG-1Jets_Bin-MLL-4to50_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
@@ -231,7 +231,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['ZgS'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 # addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_Bin-MLL-4to50", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
 # addSubSampleWeights(samples, 'ZgS', "DYGto2LG-1Jets_Bin-MLL-50", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
@@ -241,7 +241,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['WgS'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 # addSubSampleWeights(samples, 'WgS', "WGtoLNuG-1J", "(Gen_ZGstar_mass > 0 && Gen_ZGstar_mass <= 4)")
 
@@ -250,7 +250,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['WZS'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 # addSubSampleWeights(samples, 'WZS', "WZTo3LNu", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 
@@ -268,7 +268,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['VVV'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # ##################
@@ -279,7 +279,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['ggH_hww'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # # VBFHto2Wto2L2Nu_Par-M-125_TuneCP5_13p6TeV_powheg-jhugen-pythia8
@@ -287,7 +287,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['qqH_hww'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # #TODO: add VH and ttH
@@ -305,7 +305,7 @@ mcCommonWeightNoMatch = 'XSWeight * SFweight2l * LepWPCut * LepWPSF'
 # samples['WW'] = {
 #     'name': files,
 #     'weight': mcCommonWeight,
-#         'EventsPerJob': 500000,
+#         'MaxEventsPerJob': 500000,
 # }
 
 # #TODO: add polarized

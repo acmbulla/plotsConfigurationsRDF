@@ -11,9 +11,9 @@ ALL = [skey for skey in samples]
 mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
 lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
-btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/WW/utils/data/btag'
+btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
 macros = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/macros/'
-fakerates = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/WW/utils/data/FakeRate'
+fakerates = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/FakeRate'
 
 
 #tomas kello
@@ -23,22 +23,94 @@ muWP  = 'cut_TightID_pfIsoTight_HWW_tthmva_67'
 
 Tag = 'ele_'+eleWP+'_mu_'+muWP
 
-# -------- lepton WP
-aliases['LepWPCut'] = {
-    'expr': 'LepCut2l__ele_'+eleWP+'__mu_'+muWP ,
+# -------- lepton multiplicity, counted above threshold
+#
+# AN2025_031 Sec. 4 counts leptons with pT > 10 GeV ("two, three, or four
+# isolated charged leptons with pT > 10 GeV [...] Candidate events with five or
+# more charged leptons satisfying the loose identification criteria are
+# rejected"), while Lepton_pt.size() counts the whole collection, which reaches
+# down to ~3 GeV. An event with three good leptons plus one soft spurious one is
+# a 3-lepton event, not a 4-lepton one, and must not migrate out of the WZ
+# regions.
+#
+# This works -- and switching the weights on it is safe -- only because the
+# Lepton collection is pT-ordered, so the leptons above threshold are always the
+# *first* nLepSel ones (verified: 0 violations in 77k events, thresholds 10, 15
+# and 20 GeV). That prefix is exactly what LepCut{N}l, LepSF{N}l, SFweight{N}l
+# and Lepton_promptgenmatched[0..N-1] refer to, so the tight requirement, the
+# lepton SF, the global SF and the prompt gen-matching all keep pointing at the
+# selected leptons and at nothing else.
+ptMinLep = 10.
+
+aliases['nLepSel'] = {
+    'expr': 'Sum(Lepton_pt > %ff)' % ptMinLep,
     'samples': ALL
 }
 
-aliases['LepWPSF'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__mu_'+muWP,
+# the selected leptons themselves, for the helpers that take the collection.
+# Take(v, n) with n > 0 returns the first n entries, i.e. the prefix above.
+for _c in ('pt', 'eta', 'phi', 'pdgId'):
+    aliases['SelLep_' + _c] = {
+        'expr': 'Take(Lepton_%s, nLepSel)' % _c,
+        'samples': ALL
+    }
+
+# -------- lepton WP, per lepton multiplicity
+#
+# Every region pins nLepSel with '==' (see cuts.py):
+#     WW_SR, nonprompt_CR, WW_VR_bveto, WW_VR_btag   -> 2
+#     WZ_SR, WZb_CR, WZ_VR_bveto, WZ_VR_btag         -> 3
+#     ZZ_VR                                          -> 4
+# so switching on that count picks exactly the multiplicity the region requires.
+# A region written with '>=' instead of '==' would silently get the weight of
+# whichever multiplicity the event happens to have.
+#
+# These four always have to agree on N -- the tight requirement, the lepton SF,
+# the global SF and the prompt gen-matching. The nanoAOD provides LepCut{N}l,
+# LepSF{N}l, SFweight{N}l and Lepton_promptgenmatched for N = 2, 3, 4.
+nlep = 'nLepSel'
+
+for N in (2, 3, 4):
+    aliases['LepWPCut%dl' % N] = {
+        'expr': 'LepCut%dl__ele_' % N + eleWP + '__mu_' + muWP,
+        'samples': ALL
+    }
+    aliases['LepWPSF%dl' % N] = {
+        'expr': 'LepSF%dl__ele_' % N + eleWP + '__mu_' + muWP,
+        'samples': mc
+    }
+    # prompt gen-matching of the first N leptons. GenLepMatch{N}l in the nanoAOD
+    # matches to *any* gen lepton, which is not what we want: a nonprompt lepton
+    # matched to a gen lepton from a b decay would pass.
+    aliases['PromptGenLepMatch%dl' % N] = {
+        'expr': ' * '.join(
+            '(Lepton_promptgenmatched.size() > %d ? Lepton_promptgenmatched[%d] : 0.)' % (i, i)
+            for i in range(N)),
+        'samples': mc
+    }
+
+# region-aware versions. Exactly one term survives per event, because the
+# region pinned the size; an event outside 2-4 gets 0 rather than a wrong SF.
+aliases['LepWPCutN'] = {
+    'expr': ' + '.join('(%s == %d) * LepWPCut%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': ALL
+}
+aliases['LepWPSFN'] = {
+    'expr': ' + '.join('(%s == %d) * LepWPSF%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': mc
+}
+aliases['SFweightNl'] = {
+    'expr': ' + '.join('(%s == %d) * SFweight%dl' % (nlep, N, N) for N in (2, 3, 4)),
+    'samples': mc
+}
+aliases['PromptGenLepMatchN'] = {
+    'expr': ' + '.join('(%s == %d) * PromptGenLepMatch%dl' % (nlep, N, N) for N in (2, 3, 4)),
     'samples': mc
 }
 
-# gen-matching to prompt only (GenLepMatch2l matches to *any* gen lepton)
-aliases['PromptGenLepMatch2l'] = {
-    'expr': '(Lepton_promptgenmatched.size() > 0 ? Lepton_promptgenmatched[0] : 0.) * (Lepton_promptgenmatched.size() > 1 ? Lepton_promptgenmatched[0] : 0.)',
-    'samples': mc
-}
+# the old names keep working, so samples.py and nuisances.py need no change
+aliases['LepWPCut'] = {'expr': 'LepWPCutN', 'samples': ALL}
+aliases['LepWPSF']  = {'expr': 'LepWPSFN',  'samples': mc}
 
 # ------------------------------------------------
 # Same-sign 2-lepton flavour aliases (WW SR)
@@ -65,7 +137,7 @@ aliases['emu'] = {
 # ------------------------------------------------
 aliases['zstar_max'] = {
     'function' : 'computeZstar',
-    'variables': ['Lepton_eta', 'CleanJet_eta'],
+    'variables': ['SelLep_eta', 'CleanJet_eta'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
@@ -79,7 +151,7 @@ aliases['zstar_max'] = {
 # ------------------------------------------------
 aliases['WZ_vars'] = {
     'function' : 'computeWZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId',
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId',
                   'PuppiMET_pt', 'PuppiMET_phi'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
@@ -108,7 +180,7 @@ aliases['mmm'] = { 'expr': 'WZ_flav == 1313', 'samples': ALL }  # Z->mumu, W->mu
 # ------------------------------------------------
 aliases['ZZ_vars'] = {
     'function' : 'computeZZvars',
-    'variables': ['Lepton_pt', 'Lepton_eta', 'Lepton_phi', 'Lepton_pdgId'],
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId'],
     'external' : '../utils/macros/VBS_functions.cpp',
     'samples'  : ALL
 }
@@ -206,14 +278,20 @@ aliases['noJetInHorn'] = {
     'samples' : ALL
 }
 
-fake_rate_macro = open(f'{macros}fake_rate_reader_class.cc').read()
-
-aliases['_fakeRateDecl'] = {
-    'linesToAdd'    : ['#include "TInterpreter.h"'],
-    'linesToProcess': [f'gInterpreter->Declare(R"FAKE({fake_rate_macro})FAKE");'],
-    'expr'          : '1.',
-    'samples'       : ['Fake'],
-}
+# The fake-rate reader guards on Lepton_pt.size() == nLeptons_, so it has to be
+# fed the selected leptons too. Fed the full collection while the regions pin
+# nLepSel, the instances stop being mutually exclusive: in a 2-lepton region an
+# event whose third lepton is below threshold has size() == 3, so the 3l
+# instance fires and looks the fake rate up below the lowest pT bin of the map,
+# which comes back NaN and poisons the whole histogram.
+for _c, _e in (
+        ('isTightMuon',     f'ROOT::VecOps::RVec<int>(Lepton_isTightMuon_{muWP})'),
+        ('isTightElectron', f'ROOT::VecOps::RVec<int>(Lepton_isTightElectron_{eleWP})'),
+        ('muonIdx',         'ROOT::VecOps::RVec<int>(Lepton_muonIdx)')):
+    aliases['SelLep_' + _c] = {
+        'expr'   : f'Take({_e}, nLepSel)',
+        'samples': ['Fake'],
+    }
 
 for kind, label in [
     ('nominal',     ''),
@@ -226,21 +304,37 @@ for kind, label in [
     ('StatMuUp',    'StatMuUp'),
     ('StatMuDown',  'StatMuDown'),
 ]:
-    alias_name = 'fakeW' + label
-    inst_name  = 'fr_reader_' + (label if label else 'nominal')
-    aliases[alias_name] = {
-        'linesToAdd'    : ['#include "TInterpreter.h"'],
-        'linesToProcess': [
-            f'gInterpreter->Declare("fake_rate_reader {inst_name}('
-            f'\\\"{eleWP}\\\", \\\"{muWP}\\\", \\\"{kind}\\\", 2, \\\"std\\\", '
-            f'\\\"{fakerates}\\\", \\\"2024_v15_pt\\\");");',
-        ],
-        'expr': (
-            f'{inst_name}('
-            f'Lepton_pdgId, Lepton_pt, Lepton_eta, '
-            f'Lepton_isTightMuon_{muWP}, Lepton_isTightElectron_{eleWP}, '
-            f'Lepton_muonIdx, CleanJet_pt, nCleanJet)'
-        ),
+    # One instance per variation AND per multiplicity. The class handles
+    # nLeptons 2 and 3 only, and its isTight_ array holds 3, so there is
+    # deliberately no 4-lepton instance: in ZZ_VR the fake estimate is 0.
+    # Each instance returns 0 unless the event has exactly its own lepton
+    # count, so the two can simply be summed.
+    for N in (2, 3):
+        aliases['fakeW%dl' % N + label] = {
+            # the class is compiled into the generated .cpp, not declared at runtime
+            'external'     : f'{macros}fake_rate_reader_class.cc',
+            # one global instance per variation, built before main()
+            'linesToGlobal': [
+                f'fake_rate_reader fr_reader_{N}l_{label or "nominal"}'
+                f'("{eleWP}", "{muWP}", "{kind}", {N}, "std", '
+                f'"{fakerates}", "2024_v15_pt");'
+            ],
+            'function'     : f'fr_reader_{N}l_{label or "nominal"}',
+            # The typed Define() matches column types exactly and never converts,
+            # unlike the JIT-compiled 'expr' this replaces, so each column is cast
+            # to exactly what operator() declares. nCleanJet is Int_t, which
+            # already matches the int parameter; pt/eta are float and Lepton_pdgId
+            # is int, as VBS_functions.cpp already relies on.
+            'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
+                              'SelLep_isTightMuon',
+                              'SelLep_isTightElectron',
+                              'SelLep_muonIdx',
+                              'CleanJet_pt', '(int)nCleanJet'],
+            'samples'      : ['Fake'],
+        }
+
+    aliases['fakeW' + label] = {
+        'expr'   : 'fakeW2l%s + fakeW3l%s' % (label, label),
         'samples': ['Fake'],
     }
 
@@ -307,31 +401,30 @@ shifts_needed = {
     'light': ['central', 'up_correlated', 'down_correlated', 'up_uncorrelated', 'down_uncorrelated'],
 }
 
-# Dichiara la classe una volta sola
+# One instance per (flavour, shift): the configuration lives in the constructor,
+# so operator() takes only columns and can be used by the typed Define().
 for flavour in ['bc', 'light']:
-    macro_content = open(f'{macros}evaluate_btagSF{flavour}.cc').read()
-    
-    aliases[f'_btagSF{flavour}Decl'] = {
-        'linesToAdd'    : ['#include "TInterpreter.h"'],
-        'linesToProcess': [f'gInterpreter->Declare(R"BTAG({macro_content})BTAG");'],
-        'expr'          : '1.',
-        'samples'       : mc,
-    }
-    
-    # Poi per ogni variante solo ProcessLine + expr
     for shift in shifts_needed[flavour]:
         btagsf = 'btagSF' + flavour + ('' if shift == 'central' else '_' + shift)
         aliases[btagsf] = {
-            'linesToAdd'    : ['#include "TInterpreter.h"'],
-            'linesToProcess': [
-                f'gInterpreter->ProcessLine("btagSF{flavour} {btagsf}_inst('
-                f'\\"{eff_map_path}\\", \\"{year}\\");");',
+            'external'     : f'{macros}evaluate_btagSF{flavour}.cc',
+            'linesToGlobal': [
+                f'btagSF{flavour} {btagsf}_inst("{eff_map_path}", "{year}", '
+                f'"{WP_eval}", "{shift}", "{tagger}", "{eff_map_year}");'
             ],
-            'expr': (
-                f"{btagsf}_inst(CleanJet_pt, CleanJet_eta, CleanJet_jetIdx, nCleanJet, "
-                f"Jet_hadronFlavour, Jet_btag{bAlgo}, '{WP_eval}', '{shift}', '{tagger}', '{eff_map_year}')"
-            ),
-            'samples': mc,
+            'function'     : f'{btagsf}_inst',
+            # The typed Define() matches column types exactly and never converts,
+            # unlike the JIT-compiled 'expr' this replaces, so every column whose
+            # branch type differs from the operator() parameter is cast here:
+            #   nCleanJet          is Int_t, operator() takes unsigned int
+            #   Jet_hadronFlavour  is UChar_t from NanoAODv12 on, declared RVecI
+            # CleanJet_pt/eta are float and CleanJet_jetIdx really is ULong64_t,
+            # as VBS_functions.cpp already relies on.
+            'variables'    : ['CleanJet_pt', 'CleanJet_eta', 'CleanJet_jetIdx',
+                              '(unsigned int)nCleanJet',
+                              'ROOT::VecOps::RVec<int>(Jet_hadronFlavour)',
+                              f'Jet_btag{bAlgo}'],
+            'samples'      : mc,
         }
 
 # B tagging selections and scale factors
@@ -375,27 +468,23 @@ aliases['LHEPdfWeight_vec']   = {'expr': 'ROOT::VecOps::RVec<double>(LHEPdfWeigh
 # data/MC scale factors
 
 # Use this for the usual SF
+# Each factor switches on the same pinned size, so the product is the
+# single-multiplicity weight of whichever region the event belongs to.
 aliases['SFweight'] = {
-    'expr': ' * '.join(['SFweight2l', 'LepWPCut', 'LepWPSF', 'btagSFbc', 'btagSFlight']),
+    'expr': ' * '.join(['SFweightNl', 'LepWPCutN', 'LepWPSFN', 'btagSFbc', 'btagSFlight']),
     'samples': mc
 }
 
-aliases['SFweightEleUp'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__Up',
-    'samples': mc
-}
-aliases['SFweightEleDown'] = {
-    'expr': 'LepSF2l__ele_'+eleWP+'__Down',
-    'samples': mc
-}
-aliases['SFweightMuUp'] = {
-    'expr': 'LepSF2l__mu_'+muWP+'__Up',
-    'samples': mc
-}
-aliases['SFweightMuDown'] = {
-    'expr': 'LepSF2l__mu_'+muWP+'__Down',
-    'samples': mc
-}
+# lepton SF variations, switched on the multiplicity like the nominal above.
+# NB: the nuisances using these are currently commented out in nuisances.py.
+for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
+    for _var in ('Up', 'Down'):
+        aliases['SFweight' + _tag + _var] = {
+            'expr': ' + '.join(
+                '(%s == %d) * LepSF%dl__%s_%s__%s' % (nlep, N, N, _flav, _wp, _var)
+                for N in (2, 3, 4)),
+            'samples': mc
+        }
 
 
 
@@ -410,4 +499,3 @@ aliases['SFweightMuDown'] = {
 #   'xmlfile'  : 'code/TMVAClassification_BDTG.weights.xml',
 #   'samples': ALL
 # }
-
