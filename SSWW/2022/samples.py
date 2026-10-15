@@ -187,9 +187,9 @@ samples['ggWW'] = {
 # ##########
 # ### VZ ###
 # ##########
-# WZto3LNu-2Jets_EW_TuneCP5_13p6TeV_madgraph-madspin-pythia8
-# WZto3LNu-2Jets_QCD_TuneCP5_13p6TeV_madgraph-madspin-pythia8
-# VBSWZ-Interference_TuneCP5_13p6TeV_madgraph-pythia8
+# # WZTo3LNu-2Jets-EWK_TuneCP5_13p6TeV_madgraph-madspin-pythia8
+# # WZto3LNu_TuneCP5_13p6TeV_powheg-pythia8
+# # VBSWZ-Interference_TuneCP5_13p6TeV_madgraph-pythia8
 
 files = nanoGetSampleFiles(mcDirectory, 'WZJJ_EWK')
 samples['WZJJ_EWK'] = {
@@ -198,7 +198,7 @@ samples['WZJJ_EWK'] = {
     'MaxEventsPerJob': 1000000,
 }
 
-files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD') 
+files = nanoGetSampleFiles(mcDirectory, 'WZTo3LNu') 
 
 samples['WZJJ_QCD'] = {
     'name': files,
@@ -350,7 +350,7 @@ samples['WZSJJ_EWK'] = {
 addSubSampleWeights(samples, 'WZSJJ_EWK', "WZJJ_EWK", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 
 
-files =  nanoGetSampleFiles(mcDirectory, "WZJJ_QCD") | \
+files =  nanoGetSampleFiles(mcDirectory, "WZTo3LNu") | \
          nanoGetSampleFiles(mcDirectory, "WZJJ_Interference")
 
 samples['WZSJJ_QCD'] = {
@@ -359,7 +359,7 @@ samples['WZSJJ_QCD'] = {
     'MaxEventsPerJob': 1000000,
 }
 
-addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_QCD", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+addSubSampleWeights(samples, 'WZSJJ_QCD', "WZTo3LNu", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_Interference", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 
 # ##################

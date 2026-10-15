@@ -233,7 +233,7 @@ samples['WZJJ_EWK'] = {
 #    'useParts'  : [8, 9],
 }
 
-files = nanoGetSampleFiles(mcDirectory, 'WZJJ_QCD')
+files = nanoGetSampleFiles(mcDirectory, 'WZTo3LNu')
 
 samples['WZJJ_QCD'] = {
     'name': files,
@@ -401,7 +401,7 @@ samples['WZSJJ_EWK'] = {
 addSubSampleWeights(samples, 'WZSJJ_EWK', "WZJJ_EWK", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 
 
-files =  nanoGetSampleFiles(mcDirectory, "WZJJ_QCD") | \
+files =  nanoGetSampleFiles(mcDirectory, "WZTo3LNu") | \
          nanoGetSampleFiles(mcDirectory, "WZJJ_Interference")
 
 samples['WZSJJ_QCD'] = {
@@ -412,7 +412,7 @@ samples['WZSJJ_QCD'] = {
 #    'useParts'  : [8, 9],
 }
 
-addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_QCD", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
+addSubSampleWeights(samples, 'WZSJJ_QCD', "WZTo3LNu", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 addSubSampleWeights(samples, 'WZSJJ_QCD', "WZJJ_Interference", "(Gen_ZGstar_mass >= 4 && Gen_ZGstar_mass < 50)")    
 
 ##################

@@ -80,7 +80,7 @@ groupPlot['WZ_QCD'] = {
     'nameHR'  : 'WZ QCD',
     'isSignal': 0,
     'color'   : rgb(*palette["MediumBlue"]),
-    'samples' : ['WZJJ_QCD', 'WZSJJ_QCD','WZJJ_Int'],
+    'samples' : ['WZJJ_QCD', 'WZSJJ_QCD', 'WZJJ_Int'],
     'fill'    : 1001,
 }
 

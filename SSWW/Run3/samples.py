@@ -59,17 +59,17 @@ samples['higgs'] = {
 samples['OSWW'] = {
 }  
 
-samples['VBS_SSWW'] = {
-}
+# samples['VBS_SSWW'] = {
+# }
 
-samples['VBS_SSWW_WWCM_LL'] = {
-}
+# samples['VBS_SSWW_WWCM_LL'] = {
+# }
 
-samples['VBS_SSWW_WWCM_TL'] = {
-}
+# samples['VBS_SSWW_WWCM_TL'] = {
+# }
 
-samples['VBS_SSWW_WWCM_TT'] = {
-}
+# samples['VBS_SSWW_WWCM_TT'] = {
+# }
 
 samples['WW_EWK'] = {
 }

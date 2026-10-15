@@ -10614,5 +10614,141 @@
   "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WpWpJJ_Interference__part1.root": {
     "mtime": 0,
     "nevents": 32227
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part0.root": {
+    "mtime": 0,
+    "nevents": 43021
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part1.root": {
+    "mtime": 0,
+    "nevents": 26380
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part2.root": {
+    "mtime": 0,
+    "nevents": 3438
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part3.root": {
+    "mtime": 0,
+    "nevents": 866
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part4.root": {
+    "mtime": 0,
+    "nevents": 4238
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part5.root": {
+    "mtime": 0,
+    "nevents": 20519
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part6.root": {
+    "mtime": 0,
+    "nevents": 22953
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part7.root": {
+    "mtime": 0,
+    "nevents": 1751
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part8.root": {
+    "mtime": 0,
+    "nevents": 22551
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part9.root": {
+    "mtime": 0,
+    "nevents": 41806
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part10.root": {
+    "mtime": 0,
+    "nevents": 857
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part11.root": {
+    "mtime": 0,
+    "nevents": 888
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part12.root": {
+    "mtime": 0,
+    "nevents": 1703
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part13.root": {
+    "mtime": 0,
+    "nevents": 29030
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part14.root": {
+    "mtime": 0,
+    "nevents": 1708
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part15.root": {
+    "mtime": 0,
+    "nevents": 6901
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part16.root": {
+    "mtime": 0,
+    "nevents": 5166
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part17.root": {
+    "mtime": 0,
+    "nevents": 9370
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part18.root": {
+    "mtime": 0,
+    "nevents": 1697
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part19.root": {
+    "mtime": 0,
+    "nevents": 24685
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part20.root": {
+    "mtime": 0,
+    "nevents": 2575
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part21.root": {
+    "mtime": 0,
+    "nevents": 833
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part22.root": {
+    "mtime": 0,
+    "nevents": 85777
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part23.root": {
+    "mtime": 0,
+    "nevents": 138621
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part24.root": {
+    "mtime": 0,
+    "nevents": 103658
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part25.root": {
+    "mtime": 0,
+    "nevents": 139045
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part26.root": {
+    "mtime": 0,
+    "nevents": 9469
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part27.root": {
+    "mtime": 0,
+    "nevents": 5115
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part28.root": {
+    "mtime": 0,
+    "nevents": 3442
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part29.root": {
+    "mtime": 0,
+    "nevents": 1695
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part30.root": {
+    "mtime": 0,
+    "nevents": 864
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part31.root": {
+    "mtime": 0,
+    "nevents": 3484
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part32.root": {
+    "mtime": 0,
+    "nevents": 3484
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23BPix_130x_nAODv12_Full2023BPixv12/MCl2loose2023BPixv12__MCCorr2023BPixv12JetScaling__l2tight/nanoLatino_WZTo3LNu__part33.root": {
+    "mtime": 0,
+    "nevents": 2546
   }
 }

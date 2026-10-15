@@ -48,7 +48,7 @@ lumi = 307.4
 
 # used by mkPlot to define output directory for plots
 # different from "outputDir" to do things more tidy
-outputDirPlots = './plots/' + tag
+outputDirPlots = './plots/' + tag +"_v3"
 
 
 # used by mkDatacards to define output directory for datacards

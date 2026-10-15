@@ -16210,5 +16210,241 @@
   "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WpWpJJ_Interference__part1.root": {
     "mtime": 0,
     "nevents": 53061
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part0.root": {
+    "mtime": 0,
+    "nevents": 25125
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part1.root": {
+    "mtime": 0,
+    "nevents": 80225
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part2.root": {
+    "mtime": 0,
+    "nevents": 112241
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part3.root": {
+    "mtime": 0,
+    "nevents": 17123
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part4.root": {
+    "mtime": 0,
+    "nevents": 11197
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part5.root": {
+    "mtime": 0,
+    "nevents": 816
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part6.root": {
+    "mtime": 0,
+    "nevents": 63452
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part7.root": {
+    "mtime": 0,
+    "nevents": 1740
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part8.root": {
+    "mtime": 0,
+    "nevents": 3444
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part9.root": {
+    "mtime": 0,
+    "nevents": 11153
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part10.root": {
+    "mtime": 0,
+    "nevents": 11066
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part11.root": {
+    "mtime": 0,
+    "nevents": 27375
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part12.root": {
+    "mtime": 0,
+    "nevents": 9412
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part13.root": {
+    "mtime": 0,
+    "nevents": 16241
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part14.root": {
+    "mtime": 0,
+    "nevents": 3379
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part15.root": {
+    "mtime": 0,
+    "nevents": 71222
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part16.root": {
+    "mtime": 0,
+    "nevents": 16408
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part17.root": {
+    "mtime": 0,
+    "nevents": 35275
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part18.root": {
+    "mtime": 0,
+    "nevents": 22221
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part19.root": {
+    "mtime": 0,
+    "nevents": 111675
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part20.root": {
+    "mtime": 0,
+    "nevents": 99862
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part21.root": {
+    "mtime": 0,
+    "nevents": 7717
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part22.root": {
+    "mtime": 0,
+    "nevents": 109509
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part23.root": {
+    "mtime": 0,
+    "nevents": 15341
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part24.root": {
+    "mtime": 0,
+    "nevents": 34732
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part25.root": {
+    "mtime": 0,
+    "nevents": 853
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part26.root": {
+    "mtime": 0,
+    "nevents": 12818
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part27.root": {
+    "mtime": 0,
+    "nevents": 6766
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part28.root": {
+    "mtime": 0,
+    "nevents": 41871
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part29.root": {
+    "mtime": 0,
+    "nevents": 41687
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part30.root": {
+    "mtime": 0,
+    "nevents": 866
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part31.root": {
+    "mtime": 0,
+    "nevents": 5171
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part32.root": {
+    "mtime": 0,
+    "nevents": 14442
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part33.root": {
+    "mtime": 0,
+    "nevents": 43637
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part34.root": {
+    "mtime": 0,
+    "nevents": 878
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part35.root": {
+    "mtime": 0,
+    "nevents": 70391
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part36.root": {
+    "mtime": 0,
+    "nevents": 5131
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part37.root": {
+    "mtime": 0,
+    "nevents": 75646
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part38.root": {
+    "mtime": 0,
+    "nevents": 75421
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part39.root": {
+    "mtime": 0,
+    "nevents": 23278
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part40.root": {
+    "mtime": 0,
+    "nevents": 8965
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part41.root": {
+    "mtime": 0,
+    "nevents": 8496
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part42.root": {
+    "mtime": 0,
+    "nevents": 1706
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part43.root": {
+    "mtime": 0,
+    "nevents": 6755
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part44.root": {
+    "mtime": 0,
+    "nevents": 12886
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part45.root": {
+    "mtime": 0,
+    "nevents": 1758
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part46.root": {
+    "mtime": 0,
+    "nevents": 6061
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part47.root": {
+    "mtime": 0,
+    "nevents": 5944
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part48.root": {
+    "mtime": 0,
+    "nevents": 14543
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part49.root": {
+    "mtime": 0,
+    "nevents": 81511
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part50.root": {
+    "mtime": 0,
+    "nevents": 39906
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part51.root": {
+    "mtime": 0,
+    "nevents": 21261
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part52.root": {
+    "mtime": 0,
+    "nevents": 870
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part53.root": {
+    "mtime": 0,
+    "nevents": 816
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part54.root": {
+    "mtime": 0,
+    "nevents": 2563
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part55.root": {
+    "mtime": 0,
+    "nevents": 16220
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part56.root": {
+    "mtime": 0,
+    "nevents": 846
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part57.root": {
+    "mtime": 0,
+    "nevents": 1784
+  },
+  "root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano/Summer23_130x_nAODv12_Full2023v12/MCl2loose2023v12__MCCorr2023v12JetScaling__l2tight/nanoLatino_WZTo3LNu__part58.root": {
+    "mtime": 0,
+    "nevents": 3443
   }
 }

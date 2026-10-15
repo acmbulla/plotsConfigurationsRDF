@@ -1,12 +1,3 @@
-# ------------------------------------------------
-# A reduced, diagnostic set is active; the rest stays commented out.
-#
-# Note that mjj, detajj and zstar_max are meaningless in WZ_CR_incl, which
-# requires no jets: computeZstar returns -1 and the mjj/detajj branches are
-# unset, so with fold = 3 those events pile into the first bin. Read them in
-# the jet-tagged regions only.
-# ------------------------------------------------
-
 
 # ------------------------------------------------
 # variables.py - VBS WW/WZ analysis
@@ -26,33 +17,12 @@ variables['events'] = {
     'fold' : 3
 }
 
-# nLepSel is what the selection counts (leptons above 10 GeV); nlep above is
-# the whole collection, which reaches down to ~3 GeV. Plotting both is the
-# direct handle on how many events carry a soft spurious lepton, in data and
-# in simulation.
-variables['nlepsel'] = {
-    'name' : 'nLepSel',
-    'range': (5, 0, 5),
-    'xaxis': 'N_{leptons} (p_{T} > 10 GeV)',
-    'fold' : 2
-}
-
-# NOT called 'njet': that name is already a branch in these nanoAODs, and
-# SafeDefine leaves an existing column alone, so variables['njet'] silently
-# histograms the branch instead of the expression it declares.
-variables['njet30'] = {
+variables['njet'] = {
     'name' : 'Sum(CleanJet_pt > 30)',
     'range': (8, 0, 8),
     'xaxis': 'N_{jets} (p_{T} > 30 GeV)',
     'fold' : 2
 }
-
-# variables['njet'] = {
-#     'name' : 'Sum(CleanJet_pt > 30)',
-#     'range': (8, 0, 8),
-#     'xaxis': 'N_{jets} (p_{T} > 30 GeV)',
-#     'fold' : 2
-# }
 
 variables['nlep'] = {
     'name' : 'Lepton_pt.size()',
@@ -95,26 +65,26 @@ variables['etal2'] = {
 # ------------------------------------------------
 # Dilepton system (WW)
 # ------------------------------------------------
-# variables['mll'] = {
-#     'name' : 'mll',
-#     'range': (10, 20, 320),
-#     'xaxis': 'm_{ll} [GeV]',
-#     'fold' : 2
-# }
+variables['mll'] = {
+    'name' : 'mll',
+    'range': (10, 20, 320),
+    'xaxis': 'm_{ll} [GeV]',
+    'fold' : 2
+}
 
-# variables['drll'] = {
-#     'name' : 'dRll',
-#     'range': (10, 0, 5),
-#     'xaxis': '#Delta R(l_{1}, l_{2})',
-#     'fold' : 2
-# }
+variables['drll'] = {
+    'name' : 'dRll',
+    'range': (10, 0, 5),
+    'xaxis': '#Delta R(l_{1}, l_{2})',
+    'fold' : 2
+}
 
-# variables['dphill'] = {
-#     'name' : 'dphill',
-#     'range': (10, 0, 3.15),
-#     'xaxis': '#Delta#phi(l_{1}, l_{2})',
-#     'fold' : 2
-# }
+variables['dphill'] = {
+    'name' : 'dphill',
+    'range': (10, 0, 3.15),
+    'xaxis': '#Delta#phi(l_{1}, l_{2})',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # MET
@@ -126,36 +96,36 @@ variables['MET'] = {
     'fold' : 2
 }
 
-# variables['MET_phi'] = {
-#     'name' : 'PuppiMET_phi',
-#     'range': (10, -3.15, 3.15),
-#     'xaxis': '#phi(p_{T}^{miss})',
-#     'fold' : 0
-# }
+variables['MET_phi'] = {
+    'name' : 'PuppiMET_phi',
+    'range': (10, -3.15, 3.15),
+    'xaxis': '#phi(p_{T}^{miss})',
+    'fold' : 0
+}
 
 # ------------------------------------------------
 # WW-specific variables
 # ------------------------------------------------
-# variables['mT2'] = {
-#     'name' : 'mT2',
-#     'range': (10, 0, 150),
-#     'xaxis': 'm_{T2} [GeV]',
-#     'fold' : 2
-# }
+variables['mT2'] = {
+    'name' : 'mT2',
+    'range': (10, 0, 150),
+    'xaxis': 'm_{T2} [GeV]',
+    'fold' : 2
+}
 
-# variables['proxyW_l1'] = {
-#     'name' : 'proxyW_l1',
-#     'range': (10, 0, 300),
-#     'xaxis': 'm_{T}(l_{1}, p_{T}^{miss}) [GeV]',
-#     'fold' : 2
-# }
+variables['proxyW_l1'] = {
+    'name' : 'proxyW_l1',
+    'range': (10, 0, 300),
+    'xaxis': 'm_{T}(l_{1}, p_{T}^{miss}) [GeV]',
+    'fold' : 2
+}
 
-# variables['proxyW_l2'] = {
-#     'name' : 'proxyW_l2',
-#     'range': (10, 0, 300),
-#     'xaxis': 'm_{T}(l_{2}, p_{T}^{miss}) [GeV]',
-#     'fold' : 2
-# }
+variables['proxyW_l2'] = {
+    'name' : 'proxyW_l2',
+    'range': (10, 0, 300),
+    'xaxis': 'm_{T}(l_{2}, p_{T}^{miss}) [GeV]',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # Jet kinematics
@@ -174,19 +144,19 @@ variables['ptj2'] = {
     'fold' : 2
 }
 
-# variables['etaj1'] = {
-#     'name' : 'CleanJet_pt.size() > 0 ? CleanJet_eta[0] : -9999.',
-#     'range': (10, -5, 5),
-#     'xaxis': '#eta^{j1}',
-#     'fold' : 0
-# }
+variables['etaj1'] = {
+    'name' : 'CleanJet_pt.size() > 0 ? CleanJet_eta[0] : -9999.',
+    'range': (10, -5, 5),
+    'xaxis': '#eta^{j1}',
+    'fold' : 0
+}
 
-# variables['etaj2'] = {
-#     'name' : 'CleanJet_pt.size() > 1 ? CleanJet_eta[1] : -9999.',
-#     'range': (10, -5, 5),
-#     'xaxis': '#eta^{j2}',
-#     'fold' : 0
-# }
+variables['etaj2'] = {
+    'name' : 'CleanJet_pt.size() > 1 ? CleanJet_eta[1] : -9999.',
+    'range': (10, -5, 5),
+    'xaxis': '#eta^{j2}',
+    'fold' : 0
+}
 
 # ------------------------------------------------
 # VBS dijet system
@@ -198,12 +168,12 @@ variables['mjj'] = {
     'fold' : 2
 }
 
-# variables['mjj_incl'] = {
-#     'name' : 'mjj',
-#     'range': ([200, 300, 400, 500, 700, 1000, 1500, 3000]),
-#     'xaxis': 'm_{jj} [GeV]',
-#     'fold' : 2
-# }
+variables['mjj_incl'] = {
+    'name' : 'mjj',
+    'range': ([200, 300, 400, 500, 700, 1000, 1500, 3000]),
+    'xaxis': 'm_{jj} [GeV]',
+    'fold' : 2
+}
 
 variables['detajj'] = {
     'name' : 'detajj',
@@ -219,50 +189,50 @@ variables['zstar_max'] = {
     'fold' : 2
 }
 
-# variables['Zepp_ll'] = {
-#     'name' : '0.5*abs((Lepton_eta[0] + Lepton_eta[1]) - (CleanJet_eta[0] + CleanJet_eta[1]))',
-#     'range': (8, 0, 4),
-#     'xaxis': 'z*_{ll}',
-#     'fold' : 2
-# }
+variables['Zepp_ll'] = {
+    'name' : '0.5*abs((Lepton_eta[0] + Lepton_eta[1]) - (CleanJet_eta[0] + CleanJet_eta[1]))',
+    'range': (8, 0, 4),
+    'xaxis': 'z*_{ll}',
+    'fold' : 2
+}
 
-# variables['Rpt'] = {
-#     'name' : 'Lepton_pt[0]*Lepton_pt[1]/(CleanJet_pt[0]*CleanJet_pt[1])',
-#     'range': (8, 0, 0.5),
-#     'xaxis': 'R_{pT}',
-#     'fold' : 2
-# }
+variables['Rpt'] = {
+    'name' : 'Lepton_pt[0]*Lepton_pt[1]/(CleanJet_pt[0]*CleanJet_pt[1])',
+    'range': (8, 0, 0.5),
+    'xaxis': 'R_{pT}',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # Lepton-jet variables (nonprompt discrimination)
 # ------------------------------------------------
-# variables['dr_l1j1'] = {
-#     'name' : 'dr_l1j1',
-#     'range': (10, 0, 5),
-#     'xaxis': '#Delta R(l_{1}, j_{1})',
-#     'fold' : 2
-# }
+variables['dr_l1j1'] = {
+    'name' : 'dr_l1j1',
+    'range': (10, 0, 5),
+    'xaxis': '#Delta R(l_{1}, j_{1})',
+    'fold' : 2
+}
 
-# variables['dr_l2j1'] = {
-#     'name' : 'dr_l2j1',
-#     'range': (10, 0, 5),
-#     'xaxis': '#Delta R(l_{2}, j_{1})',
-#     'fold' : 2
-# }
+variables['dr_l2j1'] = {
+    'name' : 'dr_l2j1',
+    'range': (10, 0, 5),
+    'xaxis': '#Delta R(l_{2}, j_{1})',
+    'fold' : 2
+}
 
-# variables['m_l1j1'] = {
-#     'name' : 'm_l1j1',
-#     'range': (10, 0, 400),
-#     'xaxis': 'm(l_{1}, j_{1}) [GeV]',
-#     'fold' : 2
-# }
+variables['m_l1j1'] = {
+    'name' : 'm_l1j1',
+    'range': (10, 0, 400),
+    'xaxis': 'm(l_{1}, j_{1}) [GeV]',
+    'fold' : 2
+}
 
-# variables['m_l2j1'] = {
-#     'name' : 'm_l2j1',
-#     'range': (10, 0, 400),
-#     'xaxis': 'm(l_{2}, j_{1}) [GeV]',
-#     'fold' : 2
-# }
+variables['m_l2j1'] = {
+    'name' : 'm_l2j1',
+    'range': (10, 0, 400),
+    'xaxis': 'm(l_{2}, j_{1}) [GeV]',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # WZ-specific variables
@@ -288,52 +258,52 @@ variables['pt_W'] = {
     'fold' : 2
 }
 
-# variables['proxyW_W'] = {
-#     'name' : 'proxyW_W',
-#     'range': (10, 0, 300),
-#     'xaxis': 'm_{T}(l_{W}, p_{T}^{miss}) [GeV]',
-#     'fold' : 2
-# }
+variables['proxyW_W'] = {
+    'name' : 'proxyW_W',
+    'range': (10, 0, 300),
+    'xaxis': 'm_{T}(l_{W}, p_{T}^{miss}) [GeV]',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # ZZ-specific variables
 # ------------------------------------------------
-# variables['mll_Z1'] = {
-#     'name' : 'mll_Z1',
-#     'range': (10, 61, 121),
-#     'xaxis': 'm_{ll}^{Z1} [GeV]',
-#     'fold' : 0
-# }
+variables['mll_Z1'] = {
+    'name' : 'mll_Z1',
+    'range': (10, 61, 121),
+    'xaxis': 'm_{ll}^{Z1} [GeV]',
+    'fold' : 0
+}
 
-# variables['mll_Z2'] = {
-#     'name' : 'mll_Z2',
-#     'range': (10, 61, 121),
-#     'xaxis': 'm_{ll}^{Z2} [GeV]',
-#     'fold' : 0
-# }
+variables['mll_Z2'] = {
+    'name' : 'mll_Z2',
+    'range': (10, 61, 121),
+    'xaxis': 'm_{ll}^{Z2} [GeV]',
+    'fold' : 0
+}
 
-# variables['mllll'] = {
-#     'name' : 'mllll',
-#     'range': (10, 200, 600),
-#     'xaxis': 'm_{llll} [GeV]',
-#     'fold' : 2
-# }
+variables['mllll'] = {
+    'name' : 'mllll',
+    'range': (10, 200, 600),
+    'xaxis': 'm_{llll} [GeV]',
+    'fold' : 2
+}
 
 # ------------------------------------------------
 # 2D variables
 # ------------------------------------------------
-# variables['mjjVSdetajj'] = {
-#     'name' : 'mjj:detajj',
-#     'range': ([500, 700, 1000, 1500, 3000], [2.5, 4, 6, 10]),
-#     'xaxis': 'm_{jj} : #Delta#eta_{jj}',
-#     'fold' : 3,
-#     'is2d' : 1
-# }
+variables['mjjVSdetajj'] = {
+    'name' : 'mjj:detajj',
+    'range': ([500, 700, 1000, 1500, 3000], [2.5, 4, 6, 10]),
+    'xaxis': 'm_{jj} : #Delta#eta_{jj}',
+    'fold' : 3,
+    'is2d' : 1
+}
 
-# variables['mllVSmjj'] = {
-#     'name' : 'mll:mjj',
-#     'range': ([20, 60, 120, 300], [500, 700, 1000, 3000]),
-#     'xaxis': 'm_{ll} : m_{jj}',
-#     'fold' : 3,
-#     'is2d' : 1
-# }
+variables['mllVSmjj'] = {
+    'name' : 'mll:mjj',
+    'range': ([20, 60, 120, 300], [500, 700, 1000, 3000]),
+    'xaxis': 'm_{ll} : m_{jj}',
+    'fold' : 3,
+    'is2d' : 1
+}
