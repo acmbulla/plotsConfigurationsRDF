@@ -307,86 +307,125 @@ nuisances['UE_CP5']  = {
 }
 
 
-## QCD scale uncertainties - RDataFrame syntax (no Alt())
-## Works for samples with either 8 or 9 LHE scale weights
+# -----------------------------------------------------------------------------
+# QCD scale uncertainties
+#
+# RDataFrame syntax: no Alt(), and the index is guarded because the number of
+# LHE scale weights is 8 in some productions and 9 in others. [0] and
+# [size-1] are the two extremes of the correlated muR/muF variation in both
+# conventions, so the pair below is the same physical variation either way.
+#
+# One nuisance per physical process, grouped the way plot.py groups the
+# samples, so no stacked process ends up carrying two uncorrelated scale
+# parameters. Everything that is in `lhesamples` must appear exactly once in
+# _qcdScaleGroups -- the check right after the loop enforces it, so adding a
+# sample to samples.py without giving it a scale nuisance fails loudly here
+# instead of silently producing a datacard with a missing uncertainty.
+#
+# ggWW, ZZ and WW_DPS are absent on purpose: no LHE weights (mcfm / pure
+# pythia8), hence they are not in `lhesamples` and the *_vec aliases are never
+# defined for them. Their scale uncertainty has to be a lnN, not a shape.
+# -----------------------------------------------------------------------------
 
-_lhe_up   = 'LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[0] : 1.'
-_lhe_down = 'LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[LHEScaleWeight_vec.size()-1] : 1.'
+# The outer parentheses are NOT cosmetic: mkShapes builds the varied weight as
+#     (my_sample_weight) * <entry>
+# with no brackets around <entry> (mkShapes._build_cpp_variations_weights), so a
+# bare ternary would parse as ((w * vec.size()) > 0) ? vec[0] : 1. and drop the
+# event weight entirely. Any entry that is not a plain product or ratio has to
+# bracket itself.
+_lhe_up   = '(LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[0] : 1.)'
+_lhe_down = '(LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[LHEScaleWeight_vec.size()-1] : 1.)'
 
-nuisances['QCDscale_WW'] = {
-    'name'    : 'QCDscale_WW',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'WW': [_lhe_up, _lhe_down]}
+_qcdScaleGroups = {
+    # --- signal: same-sign WW
+    # WW_EWK and the three polarisation samples are the same process (the
+    # polarised ones are its decomposition), so one correlated parameter.
+    # the inclusive VBS_SSWW is commented out in samples.py (it double counts
+    # WW_EWK + WW_QCD + WW_Int); add it back here if it is ever re-enabled.
+    'QCDscale_VBS_SSWW' : ['WW_EWK',
+                           'VBS_SSWW_WWCM_LL', 'VBS_SSWW_WWCM_TL', 'VBS_SSWW_WWCM_TT'],
+    'QCDscale_SSWW_QCD' : ['WW_QCD', 'WW_Int'],
+
+    # --- WZ, split EWK / QCD exactly as groupPlot does in plot.py
+    'QCDscale_WZ_EWK'   : ['WZJJ_EWK', 'WZSJJ_EWK'],
+    'QCDscale_WZ'       : ['WZJJ_QCD', 'WZSJJ_QCD', 'WZJJ_Int'],
+
+    # --- top
+    'QCDscale_ttbar'    : ['top'],
+    'QCDscale_tVx'      : ['tVx'],
+
+    # --- wrong-sign / charge-mismeasurement sources (groupPlot 'Wrong sign')
+    'QCDscale_DY'       : ['DY'],
+    'QCDscale_OSWW'     : ['OSWW'],
+
+    # --- remaining diboson / triboson (groupPlot 'VV(V)')
+    # name kept as QCDscale_VV so the datacards do not change parameter name
+    'QCDscale_VV'       : ['Wg', 'Zg', 'WgS', 'ZgS'],
+    'QCDscale_VVV'      : ['VVV'],
+
+    # --- Higgs
+    'QCDscale_ggH'      : ['ggH_hww'],
+    'QCDscale_qqH'      : ['qqH_hww'],
+    'QCDscale_higgs'    : ['higgs'],
 }
 
-# nuisances['QCDscale_ggWW'] = {
-#     'name'    : 'QCDscale_ggWW',
-#     'kind'    : 'weight',
-#     'type'    : 'shape',
-#     'samples' : {'ggWW': [_lhe_up, _lhe_down]}
-# }
+for _nuis, _slist in _qcdScaleGroups.items():
+    nuisances[_nuis] = {
+        'name'    : _nuis,
+        'kind'    : 'weight',
+        'type'    : 'shape',
+        'samples' : {s: [_lhe_up, _lhe_down] for s in _slist}
+    }
 
-nuisances['QCDscale_top'] = {
-    'name'    : 'QCDscale_ttbar',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'top': [_lhe_up, _lhe_down]}
-}
+# coherence check: every LHE sample covered once, and no group naming a sample
+# that samples.py does not define.
+_qcdScaleFlat    = [s for _l in _qcdScaleGroups.values() for s in _l]
+_qcdScaleUnknown = sorted(set(_qcdScaleFlat) - set(samples))
+_qcdScaleDup     = sorted(s for s in set(_qcdScaleFlat) if _qcdScaleFlat.count(s) > 1)
+_qcdScaleMissing = sorted(set(lhesamples) - set(_qcdScaleFlat))
+if _qcdScaleUnknown or _qcdScaleDup or _qcdScaleMissing:
+    raise ValueError(
+        'QCD scale nuisances out of sync with samples.py:'
+        + (f' unknown samples {_qcdScaleUnknown};' if _qcdScaleUnknown else '')
+        + (f' sample in two groups {_qcdScaleDup};' if _qcdScaleDup else '')
+        + (f' LHE samples with no scale nuisance {_qcdScaleMissing};' if _qcdScaleMissing else '')
+    )
 
-nuisances['QCDscale_DY'] = {
-    'name'    : 'QCDscale_DY',
-    'skipCMS' : 1,
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'DY': [_lhe_up, _lhe_down]}
-}
+# ggWW and ZZ had a shape nuisance here before, but neither carries LHE
+# weights, so it could never have worked. Left as a reminder that they still
+# need a lnN:
+# nuisances['QCDscale_ggWW'] = {'name': 'QCDscale_ggWW', 'type': 'lnN',
+#                               'samples': {'ggWW': '1.15'}}
+# nuisances['QCDscale_ZZ']   = {'name': 'QCDscale_ZZ',   'type': 'lnN',
+#                               'samples': {'ZZ': '1.10'}}
+# nuisances['QCDscale_WW_DPS'] = {'name': 'QCDscale_WW_DPS', 'type': 'lnN',
+#                                 'samples': {'WW_DPS': '1.50'}}
+#
+# And QCDscale_WW / QCDscale_WZ(S) used to name samples 'WW', 'WZ' and 'WZS',
+# none of which exist in samples.py -- mkDatacards would have written no
+# uncertainty at all for the processes they were meant to cover. Replaced by
+# QCDscale_SSWW_QCD / QCDscale_VBS_SSWW and the WZ groups above.
 
-# nuisances['QCDscale_ZZ'] = {
-#     'name'    : 'QCDscale_ZZ',
-#     'kind'    : 'weight',
-#     'type'    : 'shape',
-#     'samples' : {'ZZ': [_lhe_up, _lhe_down]}
-# }
-
-nuisances['QCDscale_WZ'] = {
-    'name'    : 'QCDscale_WZ',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'WZ': [_lhe_up, _lhe_down]}
-}
-
-nuisances['QCDscale_VV'] = {
-    'name'    : 'QCDscale_VV',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {s: [_lhe_up, _lhe_down] for s in ['WgS', 'ZgS', 'Wg', 'Zg', 'WZS']}
-}
-
-nuisances['QCDscale_VVV'] = {
-    'name'    : 'QCDscale_VVV',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'VVV': [_lhe_up, _lhe_down]}
-}
-
-nuisances['QCDscale_ggH'] = {
-    'name'    : 'QCDscale_ggH',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'ggH_hww': [_lhe_up, _lhe_down]}
-}
-
-nuisances['QCDscale_qqH'] = {
-    'name'    : 'QCDscale_qqH',
-    'kind'    : 'weight',
-    'type'    : 'shape',
-    'samples' : {'qqH_hww': [_lhe_up, _lhe_down]}
-}
-
-## PDF uncertainties - RDataFrame syntax (no Alt())
+# -----------------------------------------------------------------------------
+# PDF uncertainties - RDataFrame syntax (no Alt())
+#
+# 103 = 1 nominal + 100 Hessian eigenvectors + 2 alpha_s members (NNPDF4.0
+# hessian). Up and Down are the same expression on purpose: a Hessian member is
+# already a +1 sigma displacement in one eigendirection, so the nuisance is
+# symmetrised by combine rather than built from two members.
+#
+# Cost warning: 103 nuisances x len(lhesamples) samples x every cut x every
+# variable. With the flavour categories added in cuts.py this is the dominant
+# term in both the job time and the output file size. If a run is only about
+# shapes and not about the final fit, comment this loop out.
+#
+# Restricted to `lhesamples` for the same reason as the scale weights above:
+# ggWW / ZZ / WW_DPS have no LHEPdfWeight branch and no *_vec alias. The
+# pdf_ev0 member is the nominal, so that one nuisance is a no-op by
+# construction; it is kept so the member indices match the PDF set.
+# -----------------------------------------------------------------------------
 for i in range(103):
-    _pdf_w = f'LHEPdfWeight_vec.size() > {i} ? LHEPdfWeight_vec[{i}] : 1.'
+    _pdf_w = f'(LHEPdfWeight_vec.size() > {i} ? LHEPdfWeight_vec[{i}] : 1.)'
     nuisances[f'pdf_ev{i}'] = {
         'name'    : f'pdf_ev{i}',
         'kind'    : 'weight',
