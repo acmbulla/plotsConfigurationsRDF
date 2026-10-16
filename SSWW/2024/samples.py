@@ -485,15 +485,22 @@ samples['OSWW'] = {
 #############    SIGNALS  #################
 ###########################################
 
+# Inclusive EWK+QCD same-sign WW -- COMMENTED OUT ON PURPOSE.
+#
+# It overlaps everything else in this block: WW_EWK + WW_QCD + WW_Int cover the
+# same final state with the EWK, QCD and interference pieces separated, and
+# VBS_SSWW_WWCM_{LL,TL,TT} cover the EWK piece split by polarisation. Running
+# the inclusive sample alongside them is a double count in any stack or
+# datacard that takes more than one of them, and it is pure CPU otherwise.
+# Re-enable it only as a cross-check of the sum, and in a run of its own.
+#
 #   WpWpJJ_EWK-QCD_TuneCP5_13p6TeV_madgraph-pythia8
-files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW')
-samples['VBS_SSWW'] = {
-    'name': files,
-    'weight': mcCommonWeight,
-    'MaxEventsPerJob': 2000000,
-#    'splitParts': 10,
-#    'useParts'  : [0, 1, 2, 3],
-}
+# files = nanoGetSampleFiles(mcDirectory, 'VBS_SSWW')
+# samples['VBS_SSWW'] = {
+#     'name': files,
+#     'weight': mcCommonWeight,
+#     'MaxEventsPerJob': 8000000,
+# }
 
 
 # VBS-SSWW_PolarizationLL_TuneCP5_13p6TeV_madgraph-pythia8
