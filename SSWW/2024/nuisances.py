@@ -54,12 +54,20 @@ print(treeBaseDir)
 
 ############################### EXPERIMENTAL UNCERTAINTIES  #################################
 
-https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
-2022: 34.75 fb⁻¹ (±1.4%)
-2023: 28.40 fb⁻¹ (±1.3%)
-2024: 110.11 fb⁻¹ (±1.6%)
-2025: 125.07 fb⁻¹ (±5%) — preliminare
-2026: nessuna incertezza disponibile ancora
+# https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
+# 2022: 34.75 fb-1  (+-1.4%)
+# 2023: 28.40 fb-1  (+-1.3%)
+# 2024: 110.11 fb-1 (+-1.6%)
+# 2025: 125.07 fb-1 (+-5%)   -- preliminary
+# 2026: no uncertainty available yet
+#
+# NB: these five lines were NOT commented out, so nuisances.py did not even
+# parse ("invalid character '⁻'") and every mkShapes/mkDatacards run that
+# loads this file died on the exec(). Keep them behind a '#'.
+#
+# The 1.6% total for 2024 is split into the three Run-3 correlation pieces
+# below (uncorrelated / partially-correlated / fully-correlated), which add in
+# quadrature to it: sqrt(0.20^2 + 0.68^2 + 1.44^2) = 1.6%.
 
 
 nuisances['lumi_1'] = {
