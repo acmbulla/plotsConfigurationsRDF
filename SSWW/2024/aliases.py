@@ -995,6 +995,34 @@ aliases['dnn_mTo'] = {
 #                                                                             #
 ###############################################################################
 
+# -------- per-event key for the snapshot
+#
+# (run, luminosityBlock, event) is NOT unique in these samples -- measured 500
+# distinct triplets over 1500 rows on the signal, i.e. the event ids collide.
+# rdfentry_ is the entry index in the dataframe, which is what make_dataset.py
+# actually needs to match a varied tree back to the nominal one.
+#
+# Two properties that were checked rather than assumed:
+# - with multithreading and a TChain over several files it is the GLOBAL entry
+#   in the chain: 1500 distinct values over 1500 rows, no collisions.
+# - with Range() and IMT off (the era splitting) it reports the true entry of
+#   the file, not of the slice: Range(40, 80) gives 40..79, not 0..39, so two
+#   eras of the same file cannot collide.
+#
+# Scope: rdfentry_ is unique WITHIN A JOB. A sample whose input files are split
+# across jobs restarts the count in each one, so the key is
+# (output file path, dnn_entry) -- make_dataset.py already parses the file
+# path, so this is fine, but it is an implicit assumption. To make it explicit
+# in the data instead, mkSnapshot would have to emit
+#   .DefinePerSample("dnn_file_id",
+#        "(ULong64_t)std::hash<std::string>{}(rdfsampleinfo_.AsString())")
+# which is a framework change in latinoRDF, not something aliases.py can do
+# (DefinePerSample is not one of the alias kinds).
+#
+# Placed before the region flags below, which is also before any cut and before
+# the Range(): aliases are emitted in insertion order ahead of booking_logic.
+aliases['dnn_entry'] = {'expr': 'rdfentry_', 'samples': ALL}
+
 _dump_region = 'DNN_dump'
 
 for _cutName, _cut in cuts.items():

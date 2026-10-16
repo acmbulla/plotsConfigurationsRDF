@@ -412,6 +412,11 @@ _gen = [
 # across re-runs: hash the event number, do not shuffle at load time.
 # -------------------------------------------------------------------
 _event = [
+    # dnn_entry is the per-job row key. (run, luminosityBlock, event) collides
+    # in these samples -- 500 distinct triplets over 1500 rows on the signal --
+    # so it is NOT usable to match a varied tree to the nominal one. Use
+    # (output file path, dnn_entry); see the note in aliases.py.
+    'dnn_entry',
     'run',
     'luminosityBlock',
     'event',
