@@ -274,7 +274,37 @@ nuisances['trigg'] = {
     'samples': dict((skey, trig_syst) for skey in mc)
 }
 
-##### Electron Efficiency 
+##### Lepton Efficiency
+#
+# These are CORRECT as they stand -- checked against the nanoAOD, because the
+# naming does not make it obvious and the natural reading is wrong.
+#
+# mkShapes._build_cpp_variations_weights multiplies the nominal weight by the
+# entry (my_sample_weight * SFweightEleUp), so the entry has to be a RATIO, not
+# a scale factor. It is: LepSF{N}l__ele_<wp>__Up is already the relative
+# variation, not the varied SF.
+#
+# Measured on rootfile/nanoLatino_WZJJ_QCD__part0.root, 2-lepton events:
+#
+#   category   nominal   ele__Up   ele__Down   mu__Up    mu__Down
+#   mumu       0.9329    1.00000   1.00000     1.01153   0.98854
+#   ee         0.9020    1.01504   0.98509     1.00000   1.00000
+#   emu        0.9179    1.00756   0.99244     1.00633   0.99367
+#
+# It is exactly 1 when the event has no lepton of that flavour, symmetric
+# around 1, and half the ee shift in emu (one electron instead of two) -- i.e.
+# a per-flavour relative variation. The combined nominal
+# LepSF{N}l__ele_<wp>__mu_<wp> (= LepWPSF{N}l) sits at ~0.92 and must NOT be
+# divided out: doing so would apply the shift twice.
+#
+# Two notes on the branches:
+# - there is no per-flavour NOMINAL branch (no LepSF2l__ele_<wp> without a
+#   suffix), only __Up / __Down and the combined one. That is consistent with
+#   __Up / __Down being ratios.
+# - the TODO below says up and down are identical in these samples. On the file
+#   above they are not (1.01504 vs 0.98509 in ee), so either it was fixed in
+#   the production or it was never true for the Run3 WPs. Worth re-checking on
+#   a Summer24 nAODv15 file before trusting the pull.
 
 nuisances['eff_e'] = {
     'name': 'CMS_eff_e_2024',
@@ -283,7 +313,7 @@ nuisances['eff_e'] = {
     'samples': dict((skey, ['SFweightEleUp', 'SFweightEleDown']) for skey in mc), #TODO: IN THIS SAMPLES THERE'S AN ERROR AND SFUP AND SFDO ARE THE SAME, NEEDS TO BE FIXED
 }
 
-##### Muon Efficiency 
+##### Muon Efficiency  (same reasoning as eff_e above)
 
 nuisances['eff_m'] = {
     'name': 'CMS_eff_m_2024',
