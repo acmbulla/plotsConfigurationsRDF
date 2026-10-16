@@ -274,12 +274,20 @@ nuisances['PU'] = {
 }
 
 ##### PS
+#
+# PSWeight is indexed as [0] isr_dn, [1] fsr_dn, [2] isr_up, [3] fsr_up in the
+# 4-weight convention. Samples generated without PS weights carry a PSWeight of
+# size 1 (a single 1.0), and an out-of-range RVec access throws at event level,
+# killing the job -- so every index is size-guarded, exactly like the LHE scale
+# weights below. A sample with no PS weights then simply gets a nuisance equal
+# to the nominal, instead of crashing.
+_ps = lambda i: f'(PSWeight.size() > {i} ? PSWeight[{i}] : 1.)'
 
 nuisances['PS_ISR']  = {
     'name'    : 'ps_isr',
     'kind'    : 'weight',
     'type'    : 'shape',
-    'samples' : dict((skey, ['PSWeight[2]', 'PSWeight[0]']) for skey in mc),
+    'samples' : dict((skey, [_ps(2), _ps(0)]) for skey in mc),
     'AsLnN'   : '0',
 }
 
@@ -287,7 +295,7 @@ nuisances['PS_FSR']  = {
     'name'    : 'ps_fsr',
     'kind'    : 'weight',
     'type'    : 'shape',
-    'samples' : dict((skey, ['PSWeight[3]', 'PSWeight[1]']) for skey in mc),
+    'samples' : dict((skey, [_ps(3), _ps(1)]) for skey in mc),
     'AsLnN'   : '0',
 }
 
