@@ -194,32 +194,40 @@ for flavour in ['bc', 'light']:
             'samples': dict((skey, btag_syst) for skey in mc),
         }
 
-'''
-for source in nuisance_sources['bc']:
-    btag_syst = [f'btagSFbc_up_{source}/btagSFbc', f'btagSFbc_down_{source}/btagSFbc']
-    if source == 'statistic':
-        name = f'CMS_btagSFbc_{source}_2024'
-    else :
-        name = f'CMS_btagSFbc_{source}'
-    nuisances[f'btagSFbc_{source}'] = {
-        'name': name,
-        'skipCMS': 1,
-        'kind': 'weight',
-        'type': 'shape',
-        'samples': dict((skey, btag_syst) for skey in mc),
-    }
-
-for corr in nuisance_sources['light']:
-    btag_syst = [ f'btagSFlight_up_{corr}/btagSFlight', f'btagSFlight_down_{corr}/btagSFlight']
-    name = (f'CMS_btagSFlight_{corr}' if corr == 'correlated' else f'CMS_btagSFlight_2024')
-    nuisances[f'btagSFlight_{corr}'] = {
-        'name': name,
-        'skipCMS': 1,
-        'kind': 'weight',
-        'type': 'shape',
-        'samples': dict((skey, btag_syst) for skey in mc),
-    }
-'''
+# ---- per-source bc breakdown, kept commented for reference -------------------
+# (needs the matching shifts added to `shifts_needed` in aliases.py)
+#
+# nuisance_sources = {
+#     'bc'   : ['bfragmentation', 'fsrdef', 'hdamp', 'isrdef', 'jer', 'jes',
+#               'muf', 'mur', 'pdfas', 'pileup', 'statistic', 'topmass', 'type3'],
+#     'light': ['correlated', 'uncorrelated'],
+# }
+#
+# for source in nuisance_sources['bc']:
+#     btag_syst = [f'btagSFbc_up_{source}/btagSFbc', f'btagSFbc_down_{source}/btagSFbc']
+#     if source == 'statistic':
+#         name = f'CMS_btagSFbc_{source}_2024'
+#     else :
+#         name = f'CMS_btagSFbc_{source}'
+#     nuisances[f'btagSFbc_{source}'] = {
+#         'name': name,
+#         'skipCMS': 1,
+#         'kind': 'weight',
+#         'type': 'shape',
+#         'samples': dict((skey, btag_syst) for skey in mc),
+#     }
+#
+# for corr in nuisance_sources['light']:
+#     btag_syst = [ f'btagSFlight_up_{corr}/btagSFlight', f'btagSFlight_down_{corr}/btagSFlight']
+#     name = (f'CMS_btagSFlight_{corr}' if corr == 'correlated' else f'CMS_btagSFlight_2024')
+#     nuisances[f'btagSFlight_{corr}'] = {
+#         'name': name,
+#         'skipCMS': 1,
+#         'kind': 'weight',
+#         'type': 'shape',
+#         'samples': dict((skey, btag_syst) for skey in mc),
+#     }
+# -----------------------------------------------------------------------------
 
 ##### Standard B-tagger
 
