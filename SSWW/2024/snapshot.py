@@ -476,10 +476,21 @@ variables_to_dump = (
 #
 # - The shape nuisances (JES, JER, MET scale, lepton scale/resolution) are the
 #   'suffix' kind and are produced by `mkSnapshot.py --shapeNuisances` as
-#   *separate trees*, not as extra branches. They are all commented out in
-#   nuisances.py today. Stage 4 needs at least JES and JER uncommented, and
-#   then needs the varied trees matched to the nominal one event by event via
-#   (run, luminosityBlock, event).
+#   *separate trees*, not as extra branches. They are all ACTIVE in
+#   nuisances.py now -- JER + 11 regrouped JES sources + MET + lepton scale +
+#   lepton resolution, i.e. 15 nuisances, so --shapeNuisances writes 30 varied
+#   trees per job on top of the nominal, each a full copy of
+#   variables_to_dump. Before the first systematics dump, cut that list down in
+#   nuisances.py to what stage 4 actually needs (JER and the regrouped JES
+#   total, or a couple of sources) -- otherwise the snapshot is ~30x its
+#   current size for no gain.
+#   Stage 4 then needs the varied trees matched to the nominal one event by
+#   event via (run, luminosityBlock, event).
+#
+# - The weight nuisances need nothing from --shapeNuisances: they are already
+#   covered by the _weights branches above, which is the whole point of
+#   dumping the factors separately. Only the 'suffix' kind requires varied
+#   trees.
 #
 # - The 2l, 3l and 4l branches share one flat row, so the per-lepton columns
 #   are ragged in meaning even though they are rectangular on disk. Select on

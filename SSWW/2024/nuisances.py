@@ -94,6 +94,40 @@ nuisances['lumi_3'] = {
 }
 
 
+# -----------------------------------------------------------------------------
+# TTree-level ("suffix") nuisances
+#
+# These are the expensive ones. Each needs a whole separate pass over a varied
+# copy of the nanoAOD (folderUp / folderDown), and in a snapshot run
+# `mkSnapshot.py --shapeNuisances` writes TWO extra trees per nuisance, each a
+# full copy of variables_to_dump. Nothing can be recomputed offline from a
+# weight branch, unlike every 'weight' nuisance below.
+#
+# KEPT -- jet energy (12 nuisances -> 24 varied trees)
+#   The analysis axes are mjj and detajj, and the DNN eats dnn_mjj, dnn_detajj
+#   and the whole jet block. A jet energy shift moves events across the
+#   mjj > 500 and detajj > 2.5 boundaries directly, so none of these is
+#   optional -- including HF (|eta| > 3) and EC2 (2.5 < |eta| < 3), which is
+#   exactly where the VBS tag jets live, and which are small in a central
+#   analysis but not in this one.
+#
+# COMMENTED -- expected to be sub-dominant (3 nuisances -> 6 trees saved)
+#   MET       unclustered energy. The only MET requirement is a loose
+#             PuppiMET_pt > 30, MET is not a leading DNN input, and this one is
+#             marked "#BUGGED FIXME TODO" below -- so it is not trustworthy
+#             today either.
+#   lepscale  lepton energy scale. Leptons enter only through the pT
+#             thresholds and the mll / mlll / Z windows; the migration is
+#             sub-percent next to the jet terms.
+#   lepres    lepton resolution. Smaller again than the scale.
+#
+# All three are left in place, commented, with their folders -- re-enable them
+# for the final fit, where "sub-dominant" still has to be shown and not
+# assumed. For a first DNN systematics round, cutting further to JER +
+# FlavorQCD + Absolute (3 -> 6 trees) is defensible; trim `jes_sources` for
+# that, do not delete the entries.
+# -----------------------------------------------------------------------------
+
 nuisances['JER'] = {
     'name': 'CMS_res_j_2024',
     'skipCMS' : 1,
@@ -109,8 +143,17 @@ nuisances['JER'] = {
 }
 
 
-jes_sources = ['Absolute_2024','Absolute','BBEC1_2024','BBEC1','EC2_2024','EC2','FlavorQCD','HF_2024','HF','RelativeBal','RelativeSample_2024']
-jes_sources = ["jesRegroed_"+ _ for _ in jes_sources] 
+# Regrouped JES sources. The _2024 ones are the year-uncorrelated pieces, the
+# bare ones are correlated across years by mkMergeYears.
+jes_sources = [
+    'FlavorQCD',                        # largest single source nearly everywhere
+    'Absolute_2024', 'Absolute',
+    'BBEC1_2024', 'BBEC1',
+    'RelativeBal', 'RelativeSample_2024',
+    'HF_2024', 'HF',                    # |eta| > 3  -- VBS tag jets
+    'EC2_2024', 'EC2',                  # 2.5 < |eta| < 3  -- VBS tag jets
+]
+jes_sources = ["jesRegroed_"+ _ for _ in jes_sources]
 for js in jes_sources:
     nuisances[js] = {
         'name': f'CMS_scale_{js}',
@@ -126,59 +169,68 @@ for js in jes_sources:
         'AsLnN': '0'
     }
 
-# #BUGGED FIXME TODO
-nuisances['MET'] = {
-    'name': 'CMS_scale_met_2024',
-    'skipCMS' : 1,
-    'kind': 'suffix',
-    'type': 'shape',
-    'mapUp': 'unclustEnup',
-    'mapDown': 'unclustEndo',
-    #'separator': '__',
-    'samples': dict((skey, ['1', '1']) for skey in mc),
-    'folderUp': makeMCDirectory('unclustEnup_suffix'),
-    'folderDown': makeMCDirectory('unclustEndo_suffix'),
-    'AsLnN': '0'
-}
+##### Unclustered MET scale -- COMMENTED, see the header above
+# (also still marked BUGGED FIXME TODO, so it needs a look before re-enabling)
+# nuisances['MET'] = {
+#     'name': 'CMS_scale_met_2024',
+#     'skipCMS' : 1,
+#     'kind': 'suffix',
+#     'type': 'shape',
+#     'mapUp': 'unclustEnup',
+#     'mapDown': 'unclustEndo',
+#     'samples': dict((skey, ['1', '1']) for skey in mc),
+#     'folderUp': makeMCDirectory('unclustEnup_suffix'),
+#     'folderDown': makeMCDirectory('unclustEndo_suffix'),
+#     'AsLnN': '0'
+# }
 
 
-##### Lepton scale
-nuisances['lepscale'] = {
-    'name': 'CMS_lepscale_2024',
-    'skipCMS' : 1,
-    'kind': 'suffix',
-    'type': 'shape',
-    'mapUp': 'leptonScaleup',
-    'mapDown': 'leptonScaledo',
-    #'separator': '__',
-    'samples': dict((skey, ['1', '1']) for skey in mc),
-    'folderUp': makeMCDirectory('leptonScaleup_suffix'),
-    'folderDown': makeMCDirectory('leptonScaledo_suffix'),
-    'AsLnN': '0'
-}
+##### Lepton scale -- COMMENTED, see the header above
+# nuisances['lepscale'] = {
+#     'name': 'CMS_lepscale_2024',
+#     'skipCMS' : 1,
+#     'kind': 'suffix',
+#     'type': 'shape',
+#     'mapUp': 'leptonScaleup',
+#     'mapDown': 'leptonScaledo',
+#     'samples': dict((skey, ['1', '1']) for skey in mc),
+#     'folderUp': makeMCDirectory('leptonScaleup_suffix'),
+#     'folderDown': makeMCDirectory('leptonScaledo_suffix'),
+#     'AsLnN': '0'
+# }
 
-##### Lepton resolution
-nuisances['lepres'] = {
-    'name': 'CMS_lepres_2024',
-    'skipCMS' : 1,
-    'kind': 'suffix',
-    'type': 'shape',
-    'mapUp': 'leptonResolutionup',
-    'mapDown': 'leptonResolutiondo',
-    #'separator': '__',
-    'samples': dict((skey, ['1', '1']) for skey in mc),
-    'folderUp': makeMCDirectory('leptonResolutionup_suffix'),
-    'folderDown': makeMCDirectory('leptonResolutiondo_suffix'),
-    'AsLnN': '0'
-}
+##### Lepton resolution -- COMMENTED, see the header above
+# nuisances['lepres'] = {
+#     'name': 'CMS_lepres_2024',
+#     'skipCMS' : 1,
+#     'kind': 'suffix',
+#     'type': 'shape',
+#     'mapUp': 'leptonResolutionup',
+#     'mapDown': 'leptonResolutiondo',
+#     'samples': dict((skey, ['1', '1']) for skey in mc),
+#     'folderUp': makeMCDirectory('leptonResolutionup_suffix'),
+#     'folderDown': makeMCDirectory('leptonResolutiondo_suffix'),
+#     'AsLnN': '0'
+# }
 
 # # ## B-tagger
-# # Fixed BTV SF variations
-nuisance_sources = {
-    'bc': ['bfragmentation', 'fsrdef', 'hdamp', 'isrdef', 'jer', 'jes', 'muf', 'mur', 'pdfas', 'pileup', 'statistic', 'topmass', 'type3'],   
-    'light': [ 'correlated', 'uncorrelated'],
-}
-
+#
+# Only the correlated/uncorrelated split is active. That is deliberate and it
+# is tied to aliases.py: `shifts_needed` there instantiates one btagSF{bc,light}
+# object per shift, and it lists exactly
+#     central, up_correlated, down_correlated, up_uncorrelated, down_uncorrelated
+# for both flavours. A nuisance asking for any other shift (bfragmentation,
+# jes, statistic, ...) would reference an alias that does not exist and the
+# job would not compile. To enable the per-source breakdown below, add those
+# shifts to `shifts_needed` in aliases.py FIRST.
+#
+# The full per-source lists, kept for reference:
+#   bc    : bfragmentation, fsrdef, hdamp, isrdef, jer, jes, muf, mur,
+#           pdfas, pileup, statistic, topmass, type3
+#   light : correlated, uncorrelated
+#
+# 'correlated' keeps the plain CMS_btagSF<flav>_correlated name so it can be
+# correlated across years by mkMergeYears; 'uncorrelated' is tagged _2024.
 for flavour in ['bc', 'light']:
     for corr in ['uncorrelated', 'correlated']:
         btag_syst = [f'btagSF{flavour}_up_{corr}/btagSF{flavour}', f'btagSF{flavour}_down_{corr}/btagSF{flavour}']
