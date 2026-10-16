@@ -11,7 +11,12 @@ limitFiles = -1
 
 ALL = [skey for skey in samples]
 mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
-lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ')]
+# Samples carrying LHE weights. MUST stay identical to the list in aliases.py,
+# which is what decides whether LHEScaleWeight_vec / LHEPdfWeight_vec are
+# Define()d at all: a nuisance naming a sample that has no *_vec alias kills
+# the job. ggWW is mcfm, ZZ is partly gg->ZZ (mcfm) and WW_DPS is pure pythia8,
+# so none of the three has LHEScaleWeight / LHEPdfWeight branches.
+lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
 
 redirector = 'root://eoscms.cern.ch/'
