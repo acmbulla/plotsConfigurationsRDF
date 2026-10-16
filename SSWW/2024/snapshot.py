@@ -215,11 +215,14 @@ _dnn_leptons = [
 # There is deliberately no is_DNN_dump: it is true for every event in the
 # file.
 # -------------------------------------------------------------------
+# The _SF / _DF flags come from the 'categories' of the 2-lepton regions in
+# cuts.py; the loop at the end of aliases.py generates one alias per category,
+# and a flag not listed here is dropped in silence.
 _regions = [
-    'is_WW_SR',
-    'is_nonprompt_CR',
-    'is_WW_VR_bveto',
-    'is_WW_VR_btag',
+    'is_WW_SR', 'is_WW_SR_SF', 'is_WW_SR_DF',
+    'is_nonprompt_CR', 'is_nonprompt_CR_SF', 'is_nonprompt_CR_DF',
+    'is_WW_VR_bveto', 'is_WW_VR_bveto_SF', 'is_WW_VR_bveto_DF',
+    'is_WW_VR_btag', 'is_WW_VR_btag_SF', 'is_WW_VR_btag_DF',
     'is_WZ_SR',
     'is_WZb_CR',
     'is_WZ_VR_bveto',

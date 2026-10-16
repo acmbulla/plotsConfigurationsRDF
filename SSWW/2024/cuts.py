@@ -99,8 +99,27 @@ cuts['WW_SR'] = {
         ' && mjj > 500'
         ' && detajj > 2.5'
     ),
+    # Same-flavour / different-flavour split.
+    #
+    # The Z veto for ee is already in 'expr' above, so 'ee || mumu' needs no
+    # repetition of it -- a category is ANDed with the parent expression.
+    #
+    # Why SF vs DF and not ee / mumu / emu: emu is ~half the same-sign WW yield
+    # and has no Drell-Yan charge-flip contamination at all (the flip rate for
+    # muons is negligible, so an e-mu pair cannot fake a same-sign pair the way
+    # ee can), while ee carries nearly all of it. Splitting that way separates
+    # regions with genuinely different backgrounds; splitting ee from mumu
+    # separates two regions with the same background composition and just
+    # halves the statistics of each.
+    #
+    # The finer 3-way split is kept below in case the charge-flip measurement
+    # ends up needing ee on its own.
+    'categories': {
+        'SF' : 'ee || mumu',
+        'DF' : 'emu',
+    }
     # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+    #     'ee'   : 'ee',
     #     'mumu' : 'mumu',
     #     'emu'  : 'emu',
     # }
@@ -148,8 +167,27 @@ cuts['nonprompt_CR'] = {
         ' && mjj > 500'
         ' && detajj > 2.5'
     ),
+    # Same-flavour / different-flavour split.
+    #
+    # The Z veto for ee is already in 'expr' above, so 'ee || mumu' needs no
+    # repetition of it -- a category is ANDed with the parent expression.
+    #
+    # Why SF vs DF and not ee / mumu / emu: emu is ~half the same-sign WW yield
+    # and has no Drell-Yan charge-flip contamination at all (the flip rate for
+    # muons is negligible, so an e-mu pair cannot fake a same-sign pair the way
+    # ee can), while ee carries nearly all of it. Splitting that way separates
+    # regions with genuinely different backgrounds; splitting ee from mumu
+    # separates two regions with the same background composition and just
+    # halves the statistics of each.
+    #
+    # The finer 3-way split is kept below in case the charge-flip measurement
+    # ends up needing ee on its own.
+    'categories': {
+        'SF' : 'ee || mumu',
+        'DF' : 'emu',
+    }
     # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+    #     'ee'   : 'ee',
     #     'mumu' : 'mumu',
     #     'emu'  : 'emu',
     # }
@@ -195,8 +233,27 @@ cuts['WW_VR_bveto'] = {
         ' && zstar_max < 0.75'
         ' && mjj > 200 && mjj < 500'
     ),
+    # Same-flavour / different-flavour split.
+    #
+    # The Z veto for ee is already in 'expr' above, so 'ee || mumu' needs no
+    # repetition of it -- a category is ANDed with the parent expression.
+    #
+    # Why SF vs DF and not ee / mumu / emu: emu is ~half the same-sign WW yield
+    # and has no Drell-Yan charge-flip contamination at all (the flip rate for
+    # muons is negligible, so an e-mu pair cannot fake a same-sign pair the way
+    # ee can), while ee carries nearly all of it. Splitting that way separates
+    # regions with genuinely different backgrounds; splitting ee from mumu
+    # separates two regions with the same background composition and just
+    # halves the statistics of each.
+    #
+    # The finer 3-way split is kept below in case the charge-flip measurement
+    # ends up needing ee on its own.
+    'categories': {
+        'SF' : 'ee || mumu',
+        'DF' : 'emu',
+    }
     # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+    #     'ee'   : 'ee',
     #     'mumu' : 'mumu',
     #     'emu'  : 'emu',
     # }
@@ -213,8 +270,27 @@ cuts['WW_VR_btag'] = {
         ' && zstar_max < 0.75'
         ' && mjj > 200 && mjj < 500'
     ),
+    # Same-flavour / different-flavour split.
+    #
+    # The Z veto for ee is already in 'expr' above, so 'ee || mumu' needs no
+    # repetition of it -- a category is ANDed with the parent expression.
+    #
+    # Why SF vs DF and not ee / mumu / emu: emu is ~half the same-sign WW yield
+    # and has no Drell-Yan charge-flip contamination at all (the flip rate for
+    # muons is negligible, so an e-mu pair cannot fake a same-sign pair the way
+    # ee can), while ee carries nearly all of it. Splitting that way separates
+    # regions with genuinely different backgrounds; splitting ee from mumu
+    # separates two regions with the same background composition and just
+    # halves the statistics of each.
+    #
+    # The finer 3-way split is kept below in case the charge-flip measurement
+    # ends up needing ee on its own.
+    'categories': {
+        'SF' : 'ee || mumu',
+        'DF' : 'emu',
+    }
     # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+    #     'ee'   : 'ee',
     #     'mumu' : 'mumu',
     #     'emu'  : 'emu',
     # }
