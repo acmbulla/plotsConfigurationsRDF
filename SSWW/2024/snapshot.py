@@ -126,11 +126,30 @@ _weights = [
     'btagSFlight_down_correlated',
     'btagSFlight_up_uncorrelated',
     'btagSFlight_down_uncorrelated',
-    # lepton efficiency, the aliases already built at the end of aliases.py
+    # lepton efficiency, the aliases already built at the end of aliases.py.
+    # These four are RATIOS, not scale factors (verified on the nanoAOD, see
+    # the eff_e note in nuisances.py): the shifted weight is
+    #     my_sample_weight * SFweightEleUp
+    # with nothing to divide out, so no per-flavour nominal is needed here.
     'SFweightEleUp',
     'SFweightEleDown',
     'SFweightMuUp',
     'SFweightMuDown',
+    # trigger SF, nominal + up/down for each multiplicity.
+    #
+    # Needed because the trigger factor is buried inside dnn_w_glob
+    # (= SFweightNl = SFweight{N}l, a collapsed product) and cannot be divided
+    # out of it. The nuisance in nuisances.py is the multiplicity-aware ratio
+    #     (nLepSel == N) * TriggerSFWeight_{N}l_{u,d} / TriggerSFWeight_{N}l
+    # so the offline reweighting needs the nominal AND the shifted branch of
+    # the matching N -- nLepSel is dumped in _event, so pick N from it.
+    #
+    # Mind the zero: ~22% of events have TriggerSFWeight_2l == 0 and ~71% have
+    # TriggerSFWeight_3l == 0, and those have nominal weight 0 as well. Guard
+    # the division offline exactly as nuisances.py does, or the ratio is nan.
+    'TriggerSFWeight_2l', 'TriggerSFWeight_2l_u', 'TriggerSFWeight_2l_d',
+    'TriggerSFWeight_3l', 'TriggerSFWeight_3l_u', 'TriggerSFWeight_3l_d',
+    'TriggerSFWeight_4l', 'TriggerSFWeight_4l_u', 'TriggerSFWeight_4l_d',
     # the nonprompt estimate: Fake only, dropped in silence everywhere else
     'fakeW',
     'fakeWEleUp',

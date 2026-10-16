@@ -237,9 +237,35 @@ for corr in nuisance_sources['light']:
 #        'samples': dict((skey, btag_syst) for skey in mc),
 #    }
 
-##### Trigger Scale Factors                                                                                                                                                                                
+##### Trigger Scale Factors
+#
+# Multiplicity-aware, like the nominal weight. samples.py uses `SFweight`,
+# which aliases.py builds from SFweightNl = sum_N (nLepSel == N) * SFweight{N}l
+# for N = 2, 3, 4, and SFweight{N}l contains TriggerSFWeight_{N}l. A hardcoded
+# TriggerSFWeight_2l ratio -- which is what was here -- therefore varied the
+# 2-lepton trigger SF inside WZ_* and ZZ_VR, where the nominal carries the 3l
+# and 4l one.
+#
+# Verified on rootfile/nanoLatino_WZJJ_QCD__part0.root: TriggerSFWeight_{2,3,4}l
+# and their _u / _d partners all exist.
+#
+# The != 0 guard is not decoration. In that same file 22% of the events have
+# TriggerSFWeight_2l == 0 and 71% have TriggerSFWeight_3l == 0 (no trigger
+# object fired), so the bare ratio is 0/0 -> NaN in float, and a NaN reaching
+# TH1::Fill poisons the whole bin. Those events have nominal weight 0 anyway,
+# so returning 1 for them changes nothing and keeps the arithmetic finite.
+#
+# Outside 2-4 leptons the sum is 0, exactly as SFweightNl is, and the nominal
+# weight is 0 there too -- so 0 * 0, never 0 * NaN.
+#
+# The brackets around the whole sum are required: see the note on _lhe_up.
+def _trigRatio(d):
+    return '(' + ' + '.join(
+        f'(nLepSel == {N}) * (TriggerSFWeight_{N}l != 0 '
+        f'? TriggerSFWeight_{N}l_{d} / TriggerSFWeight_{N}l : 1.)'
+        for N in (2, 3, 4)) + ')'
 
-trig_syst = ['TriggerSFWeight_2l_u/TriggerSFWeight_2l', 'TriggerSFWeight_2l_d/TriggerSFWeight_2l']
+trig_syst = [_trigRatio('u'), _trigRatio('d')]
 
 nuisances['trigg'] = {
     'name': 'CMS_eff_hwwtrigger_2024',
