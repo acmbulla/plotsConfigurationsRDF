@@ -1,6 +1,8 @@
 #ifndef BTAGLIGHTSF
 #define BTAGLIGHTSF
 
+#include <algorithm>
+#include <cstddef>
 #include <vector>
 #include <map>
 #include <string>
@@ -55,21 +57,36 @@ class btagSFlight {
     {
      
         float btag_sf = 1.;
-        for (unsigned iJ{0}; iJ != nCleanJet; ++iJ) 
+        // nCleanJet is a counter branch; the arrays are the truth. In a varied
+        // tree the two do not have to come from the same place -- a suffix
+        // production carries the collections it recomputes and nothing else --
+        // and an unchecked loop then reads past the end of the RVec, which is a
+        // segmentation violation rather than a wrong number. Same for jetIdx
+        // into the Jet collection, which is not varied at all. So the loop is
+        // bounded by what is actually there, and a jet pointing outside the
+        // Jet collection is skipped.
+        const std::size_t nJets = std::min({static_cast<std::size_t>(nCleanJet),
+                                            CleanJet_pt.size(),
+                                            CleanJet_eta.size(),
+                                            CleanJet_jetIdx.size()});
+        for (std::size_t iJ = 0; iJ < nJets; ++iJ)
         {
             if (CleanJet_pt[iJ] <= 20. || std::abs(CleanJet_eta[iJ]) >= 2.5) continue;
 
-            if (Jet_btag[CleanJet_jetIdx[iJ]] > cset_btag_wps_->evaluate({WP_})) 
+            const std::size_t jetIdx = static_cast<std::size_t>(CleanJet_jetIdx[iJ]);
+            if (jetIdx >= Jet_btag.size() || jetIdx >= Jet_hadronFlavour.size()) continue;
+
+            if (Jet_btag[jetIdx] > cset_btag_wps_->evaluate({WP_})) 
             {
-                if (Jet_hadronFlavour[CleanJet_jetIdx[iJ]] == 0) 
+                if (Jet_hadronFlavour[jetIdx] == 0) 
                     btag_sf *= cset_btag_light_->evaluate({shift_, WP_, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]});
             }
             else 
             {
-                float btag_eff = getEff(CleanJet_pt[iJ], CleanJet_eta[iJ], Jet_hadronFlavour[CleanJet_jetIdx[iJ]]);
+                float btag_eff = getEff(CleanJet_pt[iJ], CleanJet_eta[iJ], Jet_hadronFlavour[jetIdx]);
                 if (btag_eff == 1.) continue;
 
-                if (Jet_hadronFlavour[CleanJet_jetIdx[iJ]] == 0)
+                if (Jet_hadronFlavour[jetIdx] == 0)
                     btag_sf *= (1-btag_eff*cset_btag_light_->evaluate({shift_, WP_, 0, std::abs(CleanJet_eta[iJ]), CleanJet_pt[iJ]}))/(1-btag_eff);
             }
         }
