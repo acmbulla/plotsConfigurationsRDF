@@ -34,10 +34,30 @@ written down.
 
 No requirement on the jets. The rate is measured on whatever the region holds.
 
-One thing this does not decide: **the loose definition.** Default is every
-selected lepton, i.e. whatever the skim's loose ID kept. `--loose-ele` /
-`--loose-mu` name a branch to require instead, for a loose WP tighter than the
-skim's.
+**Loose is FakeObjWP, and it is already applied.** The denominator requires
+nothing per lepton on purpose. In mkShapesRDF, LeptonSel("Loose", 1, era)
+resolves "Loose" -> "isLoose" -> "FakeObjWP" (LeptonSel_cfg.LepFilter_dict) and
+then *redefines the collection itself*:
+
+    Lepton_{pt,eta,phi,pdgId,electronIdx,muonIdx}
+        = Lepton_{...}[LeptonMaskHyg_Ele && LeptonMaskHyg_Mu]
+
+with both masks built from ElectronWP[era]["FakeObjWP"] and
+MuonWP[era]["FakeObjWP"] (LeptonSel.py:211-217). So every entry of Lepton_* in
+an l1loose tree passes FakeObjWP by construction, and the loose denominator
+here is
+
+    FakeObjWP  &&  pT > 10 (nLepSel)  &&  |eta| < 2.5 (the supercut)
+
+Do NOT reach for the `isLoose` branch to express it. It is defined before that
+redefinition, so it is aligned with the *unfiltered* collection and is a
+different length from Lepton_pt; and in a Loose skim it is
+`LeptonMaskHyg_Mu || LeptonMaskHyg_Ele` with propagateMask defaulting to true,
+so it is true for everything that survives anyway.
+
+`--loose-ele` / `--loose-mu` are therefore not how FakeObjWP is applied; they
+exist for the different measurement where the denominator is itself a tight WP,
+i.e. the rate from WP_A to WP_B rather than from FakeObjWP to WP_B.
 
 Reading is over xrootd with uproot, one basket set per file, the way
 DNN/dnn/dataset.py does it: only the branches needed are fetched, a directory
@@ -511,6 +531,9 @@ def main():
     print(f"  muon WPs     : {len(mu_wps)}  {mu_wps}")
     print(f"  b-tag regions: {bcats}  (WP {opt.btag_wp} = {BTAG_WPS[opt.btag_wp]})")
     print(f"  jets         : no requirement")
+    print(f"  loose        : FakeObjWP, applied by the skim"
+          + (f" + {opt.loose_ele or ''} {opt.loose_mu or ''}".rstrip()
+             if (opt.loose_ele or opt.loose_mu) else ""))
     print(f"  trigger      : OR of {len(TRIGGER_OR)} paths, required")
     print(f"  maps         : {len(maps)}")
 
