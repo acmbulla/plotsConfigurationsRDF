@@ -87,7 +87,8 @@
 # must be a key of cuts.py -- see DNN_dump there for what it keeps and drops
 cut_to_dump = 'DNN_dump'
 
-folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/snapshot/DNNTraining/'
+# folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/snapshot/DNNTraining_v2/'
+folder_where_to_save_trees = '/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/DNNTraining_v2/'
 
 # -------------------------------------------------------------------
 # Event weight and its factors
