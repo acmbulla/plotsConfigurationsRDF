@@ -24,18 +24,20 @@ The prompt rate is the same ratio in the DY region with **no** subtraction:
 there the leptons are prompt by construction, so what the ratio measures is
 the tight efficiency of a real lepton.
 
-Three things this does not decide for you:
+Every event has to pass the combined trigger: the OR of the five paths the
+analysis uses, the same set on data and on MC (see the HLT block in
+../samples.py). It is a requirement and not an option, so data and the prompt
+MC that gets subtracted from it are selected the same way -- subtracting an MC
+that was not trigger-selected from data that was would leave the difference
+wherever the efficiency is not one. TRIGGER_OR below is the one place it is
+written down.
 
-- **the trigger.** Default is no requirement, which over-counts the loose
-  denominator on data if the sample was taken with an isolated-lepton path.
-  `--trigger` ORs the named branches. See the open point at the end of
-  snapshot.py.
-- **the away jet.** `--awayjet 20|30|40` requires nAwayJet<thr> >= 1 and is how
-  the jet20 / jet30 / jet40 maps the reader expects are produced. Default 0,
-  i.e. inclusive, which is what cuts.py dumps.
-- **the loose definition.** Default: every selected lepton, i.e. whatever the
-  skim's loose ID kept. `--loose-ele` / `--loose-mu` name a branch to require
-  instead, for a loose WP tighter than the skim's.
+No requirement on the jets. The rate is measured on whatever the region holds.
+
+One thing this does not decide: **the loose definition.** Default is every
+selected lepton, i.e. whatever the skim's loose ID kept. `--loose-ele` /
+`--loose-mu` name a branch to require instead, for a loose WP tighter than the
+skim's.
 
 Reading is over xrootd with uproot, one basket set per file, the way
 DNN/dnn/dataset.py does it: only the branches needed are fetched, a directory
@@ -86,6 +88,26 @@ DATA_SAMPLES = ("DATA",)
 #: not imported because aliases.py is exec()'d with the framework's namespace.
 BTAG_WPS = {"loose": 0.0246, "medium": 0.1272, "tight": 0.4648}
 BTAG_BRANCH = "Jet_btagUParTAK4B"
+
+#: The combined trigger, as ../samples.py declares it for 2024: the same five
+#: groups of paths for DATA and for MC, OR'd together. A file whose tree is
+#: missing one of them -- mkSnapshot drops a column it cannot find in silence,
+#: and a primary dataset need not carry every path -- counts that path as false
+#: and is reported, rather than being thrown away.
+TRIGGER_OR = (
+    # EleMu
+    "HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL",
+    "HLT_Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
+    "HLT_Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
+    # DoubleMu
+    "HLT_Mu17_TrkIsoVVL_Mu8_TrkIsoVVL_DZ_Mass3p8",
+    # SingleMu
+    "HLT_IsoMu24",
+    # DoubleEle
+    "HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL",
+    # SingleEle
+    "HLT_Ele30_WPTight_Gsf",
+)
 
 #: The b-tag regions. See the block in cuts.py: mutually exclusive, and
 #: deliberately not exhaustive, because these are the analysis' own thresholds.
@@ -183,7 +205,7 @@ def map_definitions(ele_wps, mu_wps, bcats):
 #  One file
 # ---------------------------------------------------------------------------
 
-def branches_needed(ele_wps, mu_wps, awayjet, triggers, loose_ele, loose_mu, is_data):
+def branches_needed(ele_wps, mu_wps, loose_ele, loose_mu, is_data):
     cols = [
         "nLepSel", "SelLep_pt", "SelLep_eta", "SelLep_pdgId",
         "isSS", "isEE", "isOS", "isSF", "mll", "mt_l0", "PuppiMET_pt",
@@ -191,9 +213,6 @@ def branches_needed(ele_wps, mu_wps, awayjet, triggers, loose_ele, loose_mu, is_
     ]
     cols += [f"Lepton_isTightElectron_{w}" for w in ele_wps]
     cols += [f"Lepton_isTightMuon_{w}" for w in mu_wps]
-    if awayjet:
-        cols.append(f"nAwayJet{awayjet}")
-    cols += list(triggers)
     for b in (loose_ele, loose_mu):
         if b:
             cols.append(b)
@@ -213,18 +232,18 @@ def _pad2(arr, fill):
 
 
 def process_file(args):
-    """Fill every map from one file. Returns (accumulators, error or None)."""
+    """Fill every map from one file. Returns (accumulators, [messages])."""
     (path, opts) = args
     import awkward as ak
     import uproot
 
+    msgs = []
     sample, is_data = sample_of(path)
     if sample is None:
-        return {}, f"{path}: sample not in the configuration, skipped"
+        return {}, [f"{path}: sample not in the configuration, not used"]
 
-    cols = branches_needed(opts["ele_wps"], opts["mu_wps"], opts["awayjet"],
-                           opts["triggers"], opts["loose_ele"], opts["loose_mu"],
-                           is_data)
+    cols = branches_needed(opts["ele_wps"], opts["mu_wps"],
+                           opts["loose_ele"], opts["loose_mu"], is_data)
 
     last = None
     for attempt in range(opts["retries"] + 1):
@@ -233,17 +252,26 @@ def process_file(args):
                 have = set(t.keys())
                 missing = [c for c in cols if c not in have]
                 if missing:
-                    return {}, f"{path}: missing branches {missing}"
-                a = t.arrays(cols, library="ak")
+                    return {}, [f"{path}: missing branches {missing}, not used"]
+                trig_have = [b for b in TRIGGER_OR if b in have]
+                trig_miss = [b for b in TRIGGER_OR if b not in have]
+                if not trig_have:
+                    return {}, [f"{path}: none of the trigger paths is in the "
+                                f"tree, not used"]
+                a = t.arrays(cols + trig_have, library="ak")
             break
         except Exception as exc:                      # truncated / unreachable
             last = exc
     else:
-        return {}, f"{path}: unreadable after {opts['retries'] + 1} attempts: {last}"
+        return {}, [f"{path}: unreadable after {opts['retries'] + 1} attempts: {last}"]
+
+    if trig_miss:
+        msgs.append(f"{os.path.basename(path)}: trigger path(s) absent from the "
+                    f"tree, counted as false: {trig_miss}")
 
     n = len(a["nLepSel"])
     if n == 0:
-        return {}, None
+        return {}, msgs
 
     nlep = ak.to_numpy(a["nLepSel"]).astype(np.int64)
     pt   = _pad2(a["SelLep_pt"],    np.nan)
@@ -259,16 +287,10 @@ def process_file(args):
              * ak.to_numpy(a["METFilter_Common"]).astype(np.float64)
              * opts["lumi"])
 
-    # ---- trigger
-    if opts["triggers"]:
-        fired = np.zeros(n, dtype=bool)
-        for b in opts["triggers"]:
-            fired |= ak.to_numpy(a[b]).astype(bool)
-        w = np.where(fired, w, 0.)
-
-    # ---- away jet
-    if opts["awayjet"]:
-        w = np.where(ak.to_numpy(a[f"nAwayJet{opts['awayjet']}"]) >= 1, w, 0.)
+    # ---- trigger: required, on data and on MC alike
+    fired = np.zeros(n, dtype=bool)
+    for b in trig_have:
+        fired |= ak.to_numpy(a[b]).astype(bool)
 
     # ---- b-tag counts, at both thresholds, from the jet collection itself
     idx    = ak.values_astype(a["CleanJet_jetIdx"], np.int64)
@@ -307,6 +329,7 @@ def process_file(args):
         "ss_df": (nlep == 2) & isSS & ~isSF & (mll > 12.),
         "dy":    (nlep == 2) & isOS & isSF & in_z,
     }
+    region = {k: v & fired for k, v in region.items()}
 
     # ---- per-lepton prompt flag, for the subtraction
     prompt = (_pad2(a["SelLep_promptgenmatched"], 0.) > 0.5
@@ -373,7 +396,7 @@ def process_file(args):
                 else:
                     acc[key] = acc[key] + val
 
-    return dict(acc), None
+    return dict(acc), msgs
 
 
 # ---------------------------------------------------------------------------
@@ -445,10 +468,6 @@ def main():
                     choices=sorted(BCATS), help="default: bveto and btag")
     ap.add_argument("--btag-wp", default="loose", choices=sorted(BTAG_WPS),
                     help="the b-tag WP the regions are built with (analysis: loose)")
-    ap.add_argument("--awayjet", type=int, default=0, choices=(0, 20, 30, 40),
-                    help="require nAwayJet<thr> >= 1; 0 = inclusive")
-    ap.add_argument("--trigger", default="",
-                    help="comma-separated HLT branches, OR'd; default none")
     ap.add_argument("--loose-ele", default="", help="branch defining loose electrons")
     ap.add_argument("--loose-mu", default="", help="branch defining loose muons")
     ap.add_argument("--pt-bins", default=DEFAULT_PT_BINS)
@@ -491,14 +510,13 @@ def main():
     print(f"  electron WPs : {len(ele_wps)}  {ele_wps}")
     print(f"  muon WPs     : {len(mu_wps)}  {mu_wps}")
     print(f"  b-tag regions: {bcats}  (WP {opt.btag_wp} = {BTAG_WPS[opt.btag_wp]})")
-    print(f"  away jet     : {opt.awayjet or 'inclusive'}")
-    print(f"  trigger      : {opt.trigger or 'none'}")
+    print(f"  jets         : no requirement")
+    print(f"  trigger      : OR of {len(TRIGGER_OR)} paths, required")
     print(f"  maps         : {len(maps)}")
 
     opts = {
         "ele_wps": ele_wps, "mu_wps": mu_wps, "maps": maps, "bins": bins,
-        "lumi": opt.lumi, "awayjet": opt.awayjet,
-        "triggers": tuple(x for x in opt.trigger.split(",") if x),
+        "lumi": opt.lumi,
         "loose_ele": opt.loose_ele, "loose_mu": opt.loose_mu,
         "btag_thr": BTAG_WPS[opt.btag_wp], "retries": opt.retries,
     }
@@ -511,9 +529,8 @@ def main():
         import multiprocessing as mp
         with mp.Pool(opt.workers) as pool:
             results = pool.imap_unordered(process_file, payload)
-            for i, (acc, err) in enumerate(results, 1):
-                if err:
-                    problems.append(err)
+            for i, (acc, msgs) in enumerate(results, 1):
+                problems.extend(msgs)
                 for k, v in acc.items():
                     total[k] = v if total[k] is None else total[k] + v
                 if i % 50 == 0:
@@ -521,19 +538,18 @@ def main():
     else:
         for i, item in enumerate(payload, 1):
             try:
-                acc, err = process_file(item)
+                acc, msgs = process_file(item)
             except Exception:
                 problems.append(f"{item[0]}: {traceback.format_exc(limit=1)}")
                 continue
-            if err:
-                problems.append(err)
+            problems.extend(msgs)
             for k, v in acc.items():
                 total[k] = v if total[k] is None else total[k] + v
             if i % 50 == 0:
                 print(f"    {i}/{len(files)} files")
 
     if problems:
-        print(f"\n  {len(problems)} file(s) not used:")
+        print(f"\n  {len(problems)} message(s) from the read:")
         for p in problems[:20]:
             print(f"    {p}")
         if len(problems) > 20:
