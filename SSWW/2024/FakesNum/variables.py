@@ -25,7 +25,7 @@ variables['njet'] = {
 }
 
 variables['nlep'] = {
-    'name' : 'Lepton_pt.size()',
+    'name' : 'nLepSel',
     'range': (5, 0, 5),
     'xaxis': 'N_{leptons}',
     'fold' : 2
@@ -35,28 +35,28 @@ variables['nlep'] = {
 # Lepton kinematics
 # ------------------------------------------------
 variables['ptl1'] = {
-    'name' : 'Lepton_pt.size() > 0 ? Lepton_pt[0] : -9999.',
+    'name' : 'nLepSel > 0 ? SelLep_pt[0] : -9999.',
     'range': (10, 25, 225),
     'xaxis': 'p_{T}^{l1} [GeV]',
     'fold' : 2
 }
 
 variables['ptl2'] = {
-    'name' : 'Lepton_pt.size() > 1 ? Lepton_pt[1] : -9999.',
+    'name' : 'nLepSel > 1 ? SelLep_pt[1] : -9999.',
     'range': (10, 20, 120),
     'xaxis': 'p_{T}^{l2} [GeV]',
     'fold' : 2
 }
 
 variables['etal1'] = {
-    'name' : 'Lepton_pt.size() > 0 ? Lepton_eta[0] : -9999.',
+    'name' : 'nLepSel > 0 ? SelLep_eta[0] : -9999.',
     'range': (10, -2.5, 2.5),
     'xaxis': '#eta^{l1}',
     'fold' : 0
 }
 
 variables['etal2'] = {
-    'name' : 'Lepton_pt.size() > 1 ? Lepton_eta[1] : -9999.',
+    'name' : 'nLepSel > 1 ? SelLep_eta[1] : -9999.',
     'range': (10, -2.5, 2.5),
     'xaxis': '#eta^{l2}',
     'fold' : 0

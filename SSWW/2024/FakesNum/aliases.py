@@ -116,18 +116,23 @@ aliases['LepWPSF']  = {'expr': 'LepWPSFN',  'samples': mc}
 # Same-sign 2-lepton flavour aliases (WW SR)
 # product is positive for same-sign pairs
 # ------------------------------------------------
+# On nLepSel and SelLep_pdgId, not on the raw collection: Lepton_pdgId.size()
+# counts every object the skim kept, including the soft ones below the 10 GeV
+# threshold that nLepSel defines the region with, so the two disagree on
+# exactly the events where a third soft lepton exists. One counter, used
+# everywhere.
 aliases['ee'] = {
-    'expr': '(Lepton_pdgId.size() > 0 ? Lepton_pdgId[0] : -99) * (Lepton_pdgId.size() > 1 ? Lepton_pdgId[1]: -99) == 11*11',
+    'expr': 'nLepSel == 2 && SelLep_pdgId[0] * SelLep_pdgId[1] == 11*11',
     'samples': ALL
 }
- 
+
 aliases['mumu'] = {
-    'expr': '(Lepton_pdgId.size() > 0 ? Lepton_pdgId[0] : -99) * (Lepton_pdgId.size() > 1 ? Lepton_pdgId[1]: -99) == 13*13',
+    'expr': 'nLepSel == 2 && SelLep_pdgId[0] * SelLep_pdgId[1] == 13*13',
     'samples': ALL
 }
- 
+
 aliases['emu'] = {
-    'expr': '(Lepton_pdgId.size() > 0 ? Lepton_pdgId[0] : -99) * (Lepton_pdgId.size() > 1 ? Lepton_pdgId[1]: -99) == 11*13',
+    'expr': 'nLepSel == 2 && SelLep_pdgId[0] * SelLep_pdgId[1] == 11*13',
     'samples': ALL
 }
 
