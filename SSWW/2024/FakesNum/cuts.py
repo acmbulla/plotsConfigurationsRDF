@@ -94,6 +94,31 @@ cuts['DY'] = {
 
 
 # ------------------------------------------------
+# The three b-tag regions, and the gap between two of them.
+#
+# They are NOT cuts here, because nBJet_loose / nBJet_medium and the whole
+# CleanJet collection are branches: measureFakeRate.py cuts on them, so the
+# three regions cost one re-run of that script and no new jobs. They are
+# written down here because the definitions have to match the analysis, and
+# the analysis is in ../cuts.py:
+#
+#   bveto   nBJet(pT > 20, |eta| < 2.5, btag > WP) == 0       <- 2024 bVeto
+#   btag    nBJet(pT > 30, |eta| < 2.5, btag > WP) >= 1       <- 2024 bReq
+#   incl    no requirement
+#
+# bveto and btag are mutually exclusive but NOT exhaustive: an event whose only
+# b-tagged jet has 20 < pT < 30 fails both. That gap is the analysis', not
+# ours -- bVeto and bReq are written at different thresholds there -- and it is
+# accepted deliberately, so that `btag` here is the same region as the
+# analysis top CR and the comparison means something. The alternative, moving
+# the btag threshold down to 20 to close the gap, would measure the rate in a
+# region the analysis does not have.
+#
+# Both multiplicities get all three: the b-tag is a property of the event, so
+# nothing about it depends on nLepSel.
+# ------------------------------------------------
+
+# ------------------------------------------------
 # Orthogonality, to settle once the statistics are known.
 #
 # With no b-tag or mjj requirement, the tight-tight same-sign part of FR
