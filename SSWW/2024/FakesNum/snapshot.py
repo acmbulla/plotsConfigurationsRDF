@@ -12,6 +12,8 @@
 # -------------------------------------------------------------------
 cut_to_dump = 'dump'
 
+folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/snapshot/Fakes/'
+
 # -------------------------------------------------------------------
 # Branches
 # -------------------------------------------------------------------

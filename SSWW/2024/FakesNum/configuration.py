@@ -2,7 +2,7 @@
 import os
 
 tag = 'SSWW'
-tagger = '260915_Fakes'
+tagger = '261021_Fakes24'
 
 # used by mkShape to define output directory for root files
 outputDir = './rootFile/' + tagger

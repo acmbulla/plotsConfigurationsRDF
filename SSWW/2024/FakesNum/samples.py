@@ -75,10 +75,11 @@ dataSteps          = 'DATAl1loose2024v15'
 ##############################################
 ###### Tree base directory for the site ######
 ##############################################
-treeBaseDir = '/eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano'
+treeBaseDirLat = '/eos/cms/store/group/phys_higgs/cmshww/amassiro/HWWNano'
+treeBaseDirPVT = '/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano'
 limitFiles = -1
 
-def makeMCDirectory(var=""):
+def makeMCDirectory(treeBaseDir, var=""):
     _treeBaseDir = treeBaseDir + ""
     if var == "":
         return "/".join([_treeBaseDir, mcProduction, mcSteps])
@@ -87,11 +88,13 @@ def makeMCDirectory(var=""):
 
 
 
-mcDirectory   = makeMCDirectory()
+mcDirectory    = makeMCDirectory(treeBaseDirLat)
+mcDirectoryPVT = makeMCDirectory(treeBaseDirPVT)
 print(mcDirectory)
-dataDirectoryMuon = os.path.join(treeBaseDir, dataRecoMuon, dataSteps)
-dataDirectoryEGamma = os.path.join(treeBaseDir, dataRecoEGamma, dataSteps)
-dataDirectoryMuonEG = os.path.join(treeBaseDir, dataRecoMuonEG, dataSteps)
+print(mcDirectoryPVT)
+dataDirectoryMuon = os.path.join(treeBaseDirPVT, dataRecoMuon, dataSteps)
+dataDirectoryEGamma = os.path.join(treeBaseDirPVT, dataRecoEGamma, dataSteps)
+dataDirectoryMuonEG = os.path.join(treeBaseDirPVT, dataRecoMuonEG, dataSteps)
 
 
 def nanoGetSampleFiles(path, name):
@@ -218,12 +221,12 @@ mcCommonWeight        = 'XSWeight*METFilter_Common'
 # prompt rate is measured. MLL-10to50 is kept: the DY region reaches below the
 # peak and the FR region only cuts mll > 12.
 
-files = nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-50') | \
-        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-50') | \
-        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-50') | \
-        nanoGetSampleFiles(mcDirectory, 'DYto2E-2Jets_MLL-10to50') | \
-        nanoGetSampleFiles(mcDirectory, 'DYto2Mu-2Jets_MLL-10to50') | \
-        nanoGetSampleFiles(mcDirectory, 'DYto2Tau-2Jets_MLL-10to50')
+files = nanoGetSampleFiles(mcDirectoryPVT, 'DYto2E-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectoryPVT, 'DYto2Mu-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectoryPVT, 'DYto2Tau-2Jets_MLL-50') | \
+        nanoGetSampleFiles(mcDirectoryPVT, 'DYto2E-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectoryPVT, 'DYto2Mu-2Jets_MLL-10to50') | \
+        nanoGetSampleFiles(mcDirectoryPVT, 'DYto2Tau-2Jets_MLL-10to50')
 samples['DY'] = {
     'name': files,
     'weight': mcCommonWeight,
@@ -245,8 +248,8 @@ samples['DY'] = {
 # jet. The two series are alternatives, never summed.
 
 files = nanoGetSampleFiles(mcDirectory, 'WToENu-2Jet') | \
-        nanoGetSampleFiles(mcDirectory, 'WToMuNu-2Jet') | \
-        nanoGetSampleFiles(mcDirectory, 'WToTauNu-2Jet')
+        nanoGetSampleFiles(mcDirectory, 'WToMuNu-2Jet')
+        # nanoGetSampleFiles(mcDirectory, 'WToTauNu-2Jet')
 samples['Wjets'] = {
     'name': files,
     'weight': mcCommonWeight,
