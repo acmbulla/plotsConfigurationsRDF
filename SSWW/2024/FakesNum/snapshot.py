@@ -12,7 +12,8 @@
 # -------------------------------------------------------------------
 cut_to_dump = 'dump'
 
-folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/snapshot/Fakes/'
+# folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/snapshot/Fakes/'
+folder_where_to_save_trees = '/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/'
 
 # -------------------------------------------------------------------
 # Branches
