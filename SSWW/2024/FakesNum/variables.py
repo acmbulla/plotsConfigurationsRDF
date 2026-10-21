@@ -234,60 +234,61 @@ variables['m_l2j1'] = {
     'fold' : 2
 }
 
-# ------------------------------------------------
-# WZ-specific variables
-# ------------------------------------------------
-variables['mll_Z'] = {
-    'name' : 'mll_Z',
-    'range': (10, 61, 121),
-    'xaxis': 'm_{ll}^{Z} [GeV]',
-    'fold' : 0
-}
+# Disabled with the WZ/ZZ aliases: measurement only selects one or two leptons.
+# # ------------------------------------------------
+# # WZ-specific variables
+# # ------------------------------------------------
+# variables['mll_Z'] = {
+#     'name' : 'mll_Z',
+#     'range': (10, 61, 121),
+#     'xaxis': 'm_{ll}^{Z} [GeV]',
+#     'fold' : 0
+# }
 
-variables['mlll'] = {
-    'name' : 'mlll',
-    'range': (10, 100, 500),
-    'xaxis': 'm_{lll} [GeV]',
-    'fold' : 2
-}
+# variables['mlll'] = {
+#     'name' : 'mlll',
+#     'range': (10, 100, 500),
+#     'xaxis': 'm_{lll} [GeV]',
+#     'fold' : 2
+# }
 
-variables['pt_W'] = {
-    'name' : 'pt_W',
-    'range': (10, 20, 220),
-    'xaxis': 'p_{T}^{l_{W}} [GeV]',
-    'fold' : 2
-}
+# variables['pt_W'] = {
+#     'name' : 'pt_W',
+#     'range': (10, 20, 220),
+#     'xaxis': 'p_{T}^{l_{W}} [GeV]',
+#     'fold' : 2
+# }
 
-variables['proxyW_W'] = {
-    'name' : 'proxyW_W',
-    'range': (10, 0, 300),
-    'xaxis': 'm_{T}(l_{W}, p_{T}^{miss}) [GeV]',
-    'fold' : 2
-}
+# variables['proxyW_W'] = {
+#     'name' : 'proxyW_W',
+#     'range': (10, 0, 300),
+#     'xaxis': 'm_{T}(l_{W}, p_{T}^{miss}) [GeV]',
+#     'fold' : 2
+# }
 
-# ------------------------------------------------
-# ZZ-specific variables
-# ------------------------------------------------
-variables['mll_Z1'] = {
-    'name' : 'mll_Z1',
-    'range': (10, 61, 121),
-    'xaxis': 'm_{ll}^{Z1} [GeV]',
-    'fold' : 0
-}
+# # ------------------------------------------------
+# # ZZ-specific variables
+# # ------------------------------------------------
+# variables['mll_Z1'] = {
+#     'name' : 'mll_Z1',
+#     'range': (10, 61, 121),
+#     'xaxis': 'm_{ll}^{Z1} [GeV]',
+#     'fold' : 0
+# }
 
-variables['mll_Z2'] = {
-    'name' : 'mll_Z2',
-    'range': (10, 61, 121),
-    'xaxis': 'm_{ll}^{Z2} [GeV]',
-    'fold' : 0
-}
+# variables['mll_Z2'] = {
+#     'name' : 'mll_Z2',
+#     'range': (10, 61, 121),
+#     'xaxis': 'm_{ll}^{Z2} [GeV]',
+#     'fold' : 0
+# }
 
-variables['mllll'] = {
-    'name' : 'mllll',
-    'range': (10, 200, 600),
-    'xaxis': 'm_{llll} [GeV]',
-    'fold' : 2
-}
+# variables['mllll'] = {
+#     'name' : 'mllll',
+#     'range': (10, 200, 600),
+#     'xaxis': 'm_{llll} [GeV]',
+#     'fold' : 2
+# }
 
 # ------------------------------------------------
 # 2D variables

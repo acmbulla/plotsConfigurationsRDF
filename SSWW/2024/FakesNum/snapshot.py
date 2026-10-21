@@ -20,8 +20,8 @@ folder_where_to_save_trees = '/eos/user/a/abulla/latinoRDF/plotsConfigurationsRD
 
 # Event weight. No lepton scale factor on purpose: it is a tight-lepton
 # efficiency correction, it does not describe a loose lepton, and it largely
-# cancels in the ratio. PromptGenLepMatch1l is what the prompt subtraction
-# keys on, and it is 1l here because the region has one lepton.
+# cancels in the ratio. Prompt subtraction uses SelLep_promptgenmatched
+# separately for each selected lepton.
 _weights = [
     'XSWeight',
     'METFilter_Common',
