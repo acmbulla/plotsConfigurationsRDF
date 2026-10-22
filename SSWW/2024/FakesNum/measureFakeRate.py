@@ -66,6 +66,17 @@ CTRL_VARS = {
 # construction and crossing it with 'btag' just repeats the region. The b
 # categories belong to the fake-rate maps, not here.
 CTRL_REGIONS = ('1l', 'dy', 'top')
+
+
+def ctrl_bcat_for(chan, requested):
+    """The b-category a control region is plotted in.
+
+    --ctrl-bcat applies to the QCD and DY regions, where asking for a b veto is
+    a real choice. The top CR requires a b-tag by definition, so it is always
+    plotted inclusively: 'bveto' there is empty by construction and 'btag'
+    repeats the region's own cut.
+    """
+    return 'incl' if chan == 'top' else requested
 REGION_LABELS = {
     '1l': 'QCD FR region (1 lepton)',
     'ss_sf': 'same-sign same-flavour',
@@ -371,7 +382,7 @@ def process_file(payload):
             if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                 continue
             for chan in cfg['ctrl_regions']:
-                for bcat in (cfg['ctrl_bcat'],):
+                for bcat in (ctrl_bcat_for(chan, cfg['ctrl_bcat']),):
                     for i in (0, 1):
                         if chan == '1l' and i == 1:
                             continue
@@ -469,12 +480,13 @@ def make_plots(total, cfg, base):
     files_written = 0
     for wp in cfg['ctrl_wps']:
         for chan in cfg['ctrl_regions']:
-            for bcat in (cfg['ctrl_bcat'],):
+            for bcat in (ctrl_bcat_for(chan, cfg['ctrl_bcat']),):
                 for flav in ('ele', 'mu'):
                     if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                         continue
                     for i in range(1 if chan == '1l' else 2):
-                        prefix = f'{wp}_{chan}_{flav}_lep{i}'
+                        tag = '' if bcat == 'incl' else f'_{bcat}'
+                        prefix = f'{wp}_{chan}{tag}_{flav}_lep{i}'
                         path = os.path.join(base, wp, prefix + '.pdf')
                         # Figures are built first and the PDF is opened only if
                         # there is at least one: a PdfPages closed with zero
@@ -664,8 +676,9 @@ def main():
                     help=f'regions to make control plots for '
                          f'(default: {" ".join(CTRL_REGIONS)})')
     ap.add_argument('--ctrl-bcat', choices=sorted(BCATS), default='incl',
-                    help='b-category of the control plots. Default incl: the '
-                         'regions already carry their own b requirement')
+                    help='b-category of the QCD and DY control plots '
+                         '(default incl). The top CR ignores it: it requires '
+                         'a b-tag by definition')
     ap.add_argument('--no-plots', action='store_true')
     args = ap.parse_args()
     for name, value in (('--fraction', args.fraction),
