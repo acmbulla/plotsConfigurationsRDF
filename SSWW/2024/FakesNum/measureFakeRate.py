@@ -50,6 +50,45 @@ DEFAULT_PT = '10,15,20,25,30,35,45,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
 REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
 
+# Control-plot variables. 'pt' and 'eta' take the measurement binning, so a
+# control plot is binned exactly like the map it validates; the rest have their
+# own edges here. mll is skipped in the 1-lepton region, where the branch is a
+# placeholder and would pile up in the first bin.
+CTRL_VARS = {
+    'pt':  (None, r'lepton $p_{T}$ [GeV]'),
+    'eta': (None, r'lepton $\eta$'),
+    'mll': ((0., 200., 40), r'$m_{\ell\ell}$ [GeV]'),
+    'met': ((0., 120., 24), r'PuppiMET [GeV]'),
+    'mt0': ((0., 150., 30), r'$m_{T}(\ell_{0})$ [GeV]'),
+}
+# Control plots are made for these regions only, and with no b-category split:
+# the top CR already requires a b-tag, so crossing it with 'bveto' is empty by
+# construction and crossing it with 'btag' just repeats the region. The b
+# categories belong to the fake-rate maps, not here.
+CTRL_REGIONS = ('1l', 'dy', 'top')
+REGION_LABELS = {
+    '1l': 'QCD FR region (1 lepton)',
+    'ss_sf': 'same-sign same-flavour',
+    'ss_df': 'same-sign different-flavour',
+    'dy': 'DY CR (OS SF, Z peak)',
+    'top': 'top CR (OS DF, b-tagged)',
+}
+
+
+def ctrl_vars_for(chan):
+    return [v for v in CTRL_VARS if not (v == 'mll' and chan == '1l')]
+
+
+def ctrl_binning(var, flav, cfg):
+    """Bin edges of a control variable, shared by the filling and the plotting
+    so the two can never disagree."""
+    if var == 'pt':
+        return np.asarray(cfg['bins'][flav][0], dtype=float)
+    if var == 'eta':
+        return np.asarray(cfg['bins'][flav][1], dtype=float)
+    lo, hi, nbins = CTRL_VARS[var][0]
+    return np.linspace(lo, hi, nbins + 1)
+
 
 def split_xrootd(url):
     host, _, path = url[len('root://'):].partition('/')
@@ -327,12 +366,12 @@ def process_file(payload):
     # Control plots: all MC components (prompt AND nonprompt), and data.
     # Loose = tight + rest, both plotted independently; inclusive in signed eta.
     # For ss/dy/top, select each lepton by its actual flavour and position.
-    for wp in cfg['all_wps']:
+    for wp in cfg['ctrl_wps']:
         for flav in ('ele', 'mu'):
             if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                 continue
-            for chan in REGIONS:
-                for bcat in cfg['bcats']:
+            for chan in cfg['ctrl_regions']:
+                for bcat in (cfg['ctrl_bcat'],):
                     for i in (0, 1):
                         if chan == '1l' and i == 1:
                             continue
@@ -345,24 +384,35 @@ def process_file(payload):
                         sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
                         if not np.any(sel):
                             continue
-                        x = np.clip(pt[sel, i], xb[0], np.nextafter(xb[-1], -np.inf))
                         w = weight[sel]
                         t = tight[flav, wp][sel, i]
+                        quantity = {'pt': pt[sel, i], 'eta': eta[sel, i],
+                                    'mll': mll[sel], 'met': met[sel],
+                                    'mt0': mt0[sel]}
                         # Split MC into prompt and nonprompt for composition.
-                        labels = [('data', np.ones(len(x), dtype=bool))] if is_data else [
+                        labels = [('data', np.ones(len(w), dtype=bool))] if is_data else [
                             (sample + '_prompt', prompt[sel, i]),
                             (sample + '_nonprompt', ~prompt[sel, i])]
-                        for component, component_mask in labels:
-                            for part, partmask in (('loose', np.ones(len(x), dtype=bool)),
-                                                   ('tight', t)):
-                                mask = component_mask & partmask
-                                if not mask.any():
-                                    continue
-                                for moment, ww in (('sumw', w[mask]),
-                                                   ('sumw2', w[mask]**2)):
-                                    key = ('plot', wp, chan, bcat, flav, i,
-                                           part, component, moment)
-                                    acc[key] = hist1(x[mask], ww, xb)
+                        for var in ctrl_vars_for(chan):
+                            edges = ctrl_binning(var, flav, cfg)
+                            # clipped, not dropped: an overflow event is a real
+                            # event of the region and belongs in the last bin,
+                            # or data and MC lose different events
+                            x = np.clip(quantity[var], edges[0],
+                                        np.nextafter(edges[-1], -np.inf))
+                            finite = np.isfinite(x)
+                            for component, component_mask in labels:
+                                for part, partmask in (
+                                        ('loose', np.ones(len(w), dtype=bool)),
+                                        ('tight', t)):
+                                    mask = component_mask & partmask & finite
+                                    if not mask.any():
+                                        continue
+                                    for moment, ww in (('sumw', w[mask]),
+                                                       ('sumw2', w[mask]**2)):
+                                        key = ('plot', wp, chan, bcat, flav, i,
+                                               var, part, component, moment)
+                                        acc[key] = hist1(x[mask], ww, edges)
     return acc, messages
 
 
@@ -400,22 +450,31 @@ def write_root(path, main_name, f, e, ingredients, xb, yb):
 
 
 def make_plots(total, cfg, base):
+    """One PDF per (WP, region, b-category, flavour, lepton slot).
+
+    Each PDF holds one page per control variable and per loose/tight: data
+    against the stacked MC composition, with a data/MC ratio panel underneath.
+    """
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
     os.makedirs(base, exist_ok=True)
+    components_all = [f'{sample}_{origin}' for sample in MC_SAMPLES
+                      for origin in ('prompt', 'nonprompt')]
+    # one fixed colour per component, so the same process keeps its colour in
+    # every plot of the set
+    cmap = plt.get_cmap('tab20')
+    colour = {label: cmap(k % 20) for k, label in enumerate(components_all)}
     files_written = 0
-    for wp in cfg['all_wps']:
-        for chan in REGIONS:
-            for bcat in cfg['bcats']:
+    for wp in cfg['ctrl_wps']:
+        for chan in cfg['ctrl_regions']:
+            for bcat in (cfg['ctrl_bcat'],):
                 for flav in ('ele', 'mu'):
                     if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                         continue
-                    xb = np.asarray(cfg['bins'][flav][0])
                     for i in range(1 if chan == '1l' else 2):
-                        # Each PDF contains two pages: loose and tight.
-                        prefix = f'{wp}_{chan}_{bcat}_{flav}_lep{i}'
+                        prefix = f'{wp}_{chan}_{flav}_lep{i}'
                         path = os.path.join(base, wp, prefix + '.pdf')
                         # Figures are built first and the PDF is opened only if
                         # there is at least one: a PdfPages closed with zero
@@ -423,63 +482,33 @@ def make_plots(total, cfg, base):
                         # delete if empty" shape raised FileNotFoundError on
                         # every combination with no entries.
                         figures = []
-                        for part in ('loose', 'tight'):
-                            def grab(component, moment):
-                                return total.get(('plot', wp, chan, bcat, flav, i,
-                                                  part, component, moment),
-                                                 np.zeros(len(xb)-1))
-                            data, data2 = grab('data', 'sumw'), grab('data', 'sumw2')
-                            components = []
-                            for sample in MC_SAMPLES:
-                                for origin in ('prompt', 'nonprompt'):
-                                    label = f'{sample}_{origin}'
+                        for var in ctrl_vars_for(chan):
+                            edges = ctrl_binning(var, flav, cfg)
+                            for part in ('loose', 'tight'):
+                                def grab(component, moment):
+                                    return total.get(
+                                        ('plot', wp, chan, bcat, flav, i, var,
+                                         part, component, moment),
+                                        np.zeros(len(edges) - 1))
+                                data = grab('data', 'sumw')
+                                data2 = grab('data', 'sumw2')
+                                stack = []
+                                for label in components_all:
                                     y = grab(label, 'sumw')
                                     if np.any(y):
-                                        components.append((label, y))
-                            if not np.any(data) and not components:
-                                continue
-                            fig, (ax, ratioax) = plt.subplots(
-                                2, 1, figsize=(9, 7), sharex=True,
-                                gridspec_kw={'height_ratios': [3, 1], 'hspace': .08})
-                            width = np.diff(xb)
-                            bottom = np.zeros(len(width))
-                            # Stacking signed MC is not mathematically meaningful for
-                            # negative bins: stack only if all components nonnegative.
-                            can_stack = all(np.all(y >= 0) for _, y in components)
-                            if can_stack:
-                                for label, y in components:
-                                    ax.bar(xb[:-1], y, width=width, bottom=bottom,
-                                           align='edge', alpha=.75, label=label)
-                                    bottom += y
-                            else:
-                                for label, y in components:
-                                    ax.stairs(y, xb, label=label)
-                                    bottom += y
-                            centers = (xb[:-1] + xb[1:]) / 2
-                            ax.errorbar(centers, data, yerr=np.sqrt(data2),
-                                        fmt='ko', label='DATA', markersize=4)
-                            ax.set_ylabel('Weighted events / bin')
-                            ax.set_title(f'{chan} | {bcat} | {flav} lep{i} | {wp} | {part}\n'
-                                         f'Inclusive in signed eta')
-                            ax.legend(fontsize=7, ncol=3)
-                            ax.grid(alpha=.15)
-                            ok = bottom > 0
-                            vals = np.full(len(bottom), np.nan)
-                            errs = np.full(len(bottom), np.nan)
-                            vals[ok] = data[ok] / bottom[ok]
-                            errs[ok] = np.sqrt(data2[ok]) / bottom[ok]
-                            ratioax.errorbar(centers, vals, yerr=errs,
-                                             fmt='ko', markersize=4)
-                            ratioax.axhline(1, color='gray', linestyle='--')
-                            ratioax.set_ylabel('Data / MC')
-                            ratioax.set_xlabel(r'$p_T$ [GeV]')
-                            ratioax.grid(alpha=.2)
-                            # explicit margins rather than tight_layout(), which
-                            # warns on every figure because the shared-x gridspec
-                            # is not compatible with it
-                            fig.subplots_adjust(left=.09, right=.98, top=.90,
-                                                bottom=.09)
-                            figures.append(fig)
+                                        stack.append((label, y, grab(label, 'sumw2')))
+                                if not np.any(data) and not stack:
+                                    continue
+                                fig = one_control_plot(
+                                    plt, edges, data, data2, stack, colour,
+                                    xlabel=CTRL_VARS[var][1],
+                                    lumi=cfg['lumi'],
+                                    header=f'{REGION_LABELS[chan]} | '
+                                           f'{flav} lepton {i} | {part}'
+                                           + ('' if bcat == 'incl'
+                                              else f' | {bcat}'),
+                                    wp=wp)
+                                figures.append(fig)
                         if figures:
                             os.makedirs(os.path.dirname(path), exist_ok=True)
                             with PdfPages(path) as pdf:
@@ -489,6 +518,98 @@ def make_plots(total, cfg, base):
                         for fig in figures:
                             plt.close(fig)
     return files_written
+
+
+def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
+                     header, wp):
+    """CMS-style data/MC comparison with a ratio panel. Returns the figure."""
+    fig, (ax, rax) = plt.subplots(
+        2, 1, figsize=(7.5, 7.), sharex=True,
+        gridspec_kw={'height_ratios': [3, 1], 'hspace': .06})
+    width = np.diff(edges)
+    centers = (edges[:-1] + edges[1:]) / 2
+    total_mc = np.zeros(len(width))
+    total_mc2 = np.zeros(len(width))
+    # Stacking signed MC is not meaningful if a component goes negative, which
+    # a subsampled or badly normalised set can do: fall back to outlines.
+    can_stack = all(np.all(y >= 0) for _, y, _ in stack)
+    bottom = np.zeros(len(width))
+    for label, y, y2 in stack:
+        if can_stack:
+            ax.bar(edges[:-1], y, width=width, bottom=bottom, align='edge',
+                   color=colour.get(label), edgecolor='black', linewidth=.3,
+                   label=label)
+            bottom = bottom + y
+        else:
+            ax.stairs(y, edges, label=label, color=colour.get(label))
+        total_mc = total_mc + y
+        total_mc2 = total_mc2 + y2
+    if stack and can_stack:
+        ax.bar(edges[:-1], 2 * np.sqrt(total_mc2), width=width,
+               bottom=total_mc - np.sqrt(total_mc2), align='edge',
+               facecolor='none', edgecolor='gray', hatch='////', linewidth=0,
+               label='MC stat')
+    shown = data > 0
+    ax.errorbar(centers[shown], data[shown], yerr=np.sqrt(data2[shown]),
+                fmt='ko', markersize=4, label='Data', zorder=5)
+    ax.set_ylabel('Events / bin')
+    # Zoom on the bins that hold something. The binning is global across
+    # regions, so mll in the DY CR would otherwise live in a twentieth of the
+    # axis. Nothing is hidden: bins outside the view are empty in both data
+    # and MC by construction.
+    filled = np.nonzero((data != 0) | (total_mc != 0))[0]
+    if len(filled):
+        lo = edges[max(filled[0] - 1, 0)]
+        hi = edges[min(filled[-1] + 2, len(edges) - 1)]
+        ax.set_xlim(lo, hi)
+    else:
+        ax.set_xlim(edges[0], edges[-1])
+    top = max(data.max() if len(data) else 0., total_mc.max() if len(total_mc) else 0.)
+    if top > 0:
+        ax.set_ylim(0., 1.45 * top)
+    ax.legend(fontsize=7, ncol=3, loc='upper right', framealpha=.9)
+    ax.grid(alpha=.15)
+    # CMS header, outside the frame
+    ax.text(0., 1.012, 'CMS', transform=ax.transAxes, fontweight='bold',
+            fontsize=15, va='bottom')
+    ax.text(.115, 1.015, 'Preliminary', transform=ax.transAxes, style='italic',
+            fontsize=11, va='bottom')
+    ax.text(1., 1.015, f'{lumi:.1f} fb$^{{-1}}$ (13.6 TeV)',
+            transform=ax.transAxes, fontsize=10, va='bottom', ha='right')
+    ax.text(.03, .955, header + f'\n{wp}', transform=ax.transAxes, fontsize=7.5,
+            va='top', ha='left')
+    # ratio panel: points only where both sides are defined
+    ok = (total_mc > 0) & (data > 0)
+    vals = np.full(len(width), np.nan)
+    errs = np.full(len(width), np.nan)
+    vals[ok] = data[ok] / total_mc[ok]
+    errs[ok] = np.sqrt(data2[ok]) / total_mc[ok]
+    band = np.zeros(len(width))
+    good = total_mc > 0
+    band[good] = np.sqrt(total_mc2[good]) / total_mc[good]
+    rax.bar(edges[:-1], 2 * band, width=width, bottom=1 - band, align='edge',
+            facecolor='none', edgecolor='gray', hatch='////', linewidth=0)
+    rlo, rhi = 0., 2.
+    inside = ok & (vals >= rlo) & (vals <= rhi)
+    rax.errorbar(centers[inside], vals[inside], yerr=errs[inside],
+                 fmt='ko', markersize=4)
+    # A point off the scale is drawn as a triangle at the edge. Dropping it
+    # silently would make 'data/MC is 40 here' indistinguishable from 'no data
+    # in this bin', which is exactly the case worth seeing.
+    for mask, ypos, marker in ((ok & (vals > rhi), rhi, '^'),
+                               (ok & (vals < rlo), rlo, 'v')):
+        if mask.any():
+            rax.plot(centers[mask], np.full(mask.sum(), ypos), marker,
+                     color='red', markersize=5, clip_on=False)
+    rax.axhline(1., color='gray', linestyle='--', linewidth=.8)
+    rax.set_ylabel('Data / MC', fontsize=9)
+    rax.set_xlabel(xlabel)
+    rax.set_ylim(rlo, rhi)
+    rax.grid(alpha=.2)
+    # explicit margins rather than tight_layout(), which warns on every figure
+    # because the shared-x gridspec is not compatible with it
+    fig.subplots_adjust(left=.11, right=.97, top=.93, bottom=.08)
+    return fig
 
 
 def parse_bins(text):
@@ -533,6 +654,18 @@ def main():
     ap.add_argument('--top-met-min', type=float, default=30.)
     ap.add_argument('--top-mll-min', type=float, default=12.)
     ap.add_argument('--top-min-btags', type=int, default=1)
+    ap.add_argument('--ctrl-wp', action='append', default=[],
+                    help='working points to make control plots for. Default: '
+                         'the first electron and muon WP. The maps are always '
+                         'made for every WP; this only bounds the plots, which '
+                         'cost one set of histograms per WP')
+    ap.add_argument('--ctrl-region', action='append', choices=list(REGIONS),
+                    default=[],
+                    help=f'regions to make control plots for '
+                         f'(default: {" ".join(CTRL_REGIONS)})')
+    ap.add_argument('--ctrl-bcat', choices=sorted(BCATS), default='incl',
+                    help='b-category of the control plots. Default incl: the '
+                         'regions already carry their own b requirement')
     ap.add_argument('--no-plots', action='store_true')
     args = ap.parse_args()
     for name, value in (('--fraction', args.fraction),
@@ -569,12 +702,21 @@ def main():
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
             'mu': (args.pt_bins, args.eta_bins_mu)}
     maps = map_definitions(ele_wps, mu_wps, bcats)
-    cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps,
+    ctrl_wps = args.ctrl_wp or ele_wps[:1] + mu_wps[:1]
+    unknown_ctrl = [w for w in ctrl_wps if w not in set(ele_wps + mu_wps)]
+    if unknown_ctrl:
+        ap.error(f'--ctrl-wp not among the measured working points: '
+                 f'{unknown_ctrl}')
+    cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
+               ctrl_regions=args.ctrl_region or list(CTRL_REGIONS),
+               ctrl_bcat=args.ctrl_bcat,
                all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats, bins=bins,
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
                loose_mu=args.loose_mu, btag_thr=BTAG_WPS[args.btag_wp],
                retries=args.retries, top_met_min=args.top_met_min,
                top_mll_min=args.top_mll_min, top_min_btags=args.top_min_btags)
+    print(f'Control plots: regions {args.ctrl_region or list(CTRL_REGIONS)}, '
+          f'b-category {args.ctrl_bcat}, WPs {ctrl_wps}', flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
           f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
           f'MET>{args.top_met_min}, mll>{args.top_mll_min}, '
