@@ -163,9 +163,13 @@ def process_file(payload):
     for trigger in thave:
         fired |= ak.to_numpy(a[trigger]).astype(bool)
     # Safe take for CleanJet_jetIdx == -1: such jets must not be b-tagged.
-    jet_idx = a['CleanJet_jetIdx']
+    # int64 is not optional: CleanJet_jetIdx is ULong64_t, and uint64 against
+    # the int64 literal of ak.where promotes to float64 -- which awkward then
+    # refuses as an index.  Casting first also makes the >= 0 test mean what it
+    # says instead of being vacuously true on an unsigned type.
+    jet_idx = ak.values_astype(a['CleanJet_jetIdx'], np.int64)
     valid_idx = (jet_idx >= 0) & (jet_idx < ak.num(a[BTAG_BRANCH], axis=1))
-    safe_idx = ak.where(valid_idx, jet_idx, 0)
+    safe_idx = ak.values_astype(ak.where(valid_idx, jet_idx, 0), np.int64)
     padded_btag = ak.pad_none(a[BTAG_BRANCH], 1, axis=1)
     jet_btag = ak.fill_none(padded_btag[safe_idx], -np.inf)
     tagged = (valid_idx & (np.abs(a['CleanJet_eta']) < 2.5) &
