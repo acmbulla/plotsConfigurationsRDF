@@ -54,6 +54,24 @@ REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
 # control plot is binned exactly like the map it validates; the rest have their
 # own edges here. mll is skipped in the 1-lepton region, where the branch is a
 # placeholder and would pile up in the first bin.
+# Legend groups of the control plots, stacked bottom to top in this order.
+# Anything not listed falls into 'other', so a sample added to MC_SAMPLES shows
+# up in the plots instead of disappearing from the stack.
+MC_GROUPS = {
+    'DY': ('DY',),
+    'top': ('top',),
+    'W+jets': ('Wjets',),
+    'other': ('WZ', 'ZZ', 'WW'),
+}
+GROUP_COLOURS = {
+    'DY': '#5790fc',
+    'top': '#f89c20',
+    'W+jets': '#64c364',
+    'other': '#9c9ca1',
+}
+# Default control variables. pT and eta of each selected lepton is what a
+# control plot is for; the rest are available through --ctrl-var.
+DEFAULT_CTRL_VARS = ('pt', 'eta')
 CTRL_VARS = {
     'pt':  (None, r'lepton $p_{T}$ [GeV]'),
     'eta': (None, r'lepton $\eta$'),
@@ -84,10 +102,6 @@ REGION_LABELS = {
     'dy': 'DY CR (OS SF, Z peak)',
     'top': 'top CR (OS DF, b-tagged)',
 }
-
-
-def ctrl_vars_for(chan):
-    return [v for v in CTRL_VARS if not (v == 'mll' and chan == '1l')]
 
 
 def ctrl_binning(var, flav, cfg):
@@ -404,7 +418,9 @@ def process_file(payload):
                         labels = [('data', np.ones(len(w), dtype=bool))] if is_data else [
                             (sample + '_prompt', prompt[sel, i]),
                             (sample + '_nonprompt', ~prompt[sel, i])]
-                        for var in ctrl_vars_for(chan):
+                        for var in cfg['ctrl_vars']:
+                            if var == 'mll' and chan == '1l':
+                                continue
                             edges = ctrl_binning(var, flav, cfg)
                             # clipped, not dropped: an overflow event is a real
                             # event of the region and belongs in the last bin,
@@ -460,83 +476,88 @@ def write_root(path, main_name, f, e, ingredients, xb, yb):
     file.Close()
 
 
-def make_plots(total, cfg, base):
-    """One PDF per (WP, region, b-category, flavour, lepton slot).
+def group_of(sample):
+    """Legend group a sample belongs to. Anything unlisted lands in 'other'."""
+    for group, members in MC_GROUPS.items():
+        if sample in members:
+            return group
+    return 'other'
 
-    Each PDF holds one page per control variable and per loose/tight: data
-    against the stacked MC composition, with a data/MC ratio panel underneath.
+
+def make_plots(total, cfg, base):
+    """One PNG per region, lepton slot, variable and loose/tight.
+
+    Deliberately one file per plot rather than a multi-page PDF: these are
+    looked at one at a time, and a file name that says what it holds beats
+    paging through a document.
     """
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_pdf import PdfPages
     os.makedirs(base, exist_ok=True)
-    components_all = [f'{sample}_{origin}' for sample in MC_SAMPLES
-                      for origin in ('prompt', 'nonprompt')]
-    # one fixed colour per component, so the same process keeps its colour in
-    # every plot of the set
-    cmap = plt.get_cmap('tab20')
-    colour = {label: cmap(k % 20) for k, label in enumerate(components_all)}
-    files_written = 0
+    written = []
     for wp in cfg['ctrl_wps']:
         for chan in cfg['ctrl_regions']:
-            for bcat in (ctrl_bcat_for(chan, cfg['ctrl_bcat']),):
-                for flav in ('ele', 'mu'):
-                    if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
-                        continue
-                    for i in range(1 if chan == '1l' else 2):
-                        tag = '' if bcat == 'incl' else f'_{bcat}'
-                        prefix = f'{wp}_{chan}{tag}_{flav}_lep{i}'
-                        path = os.path.join(base, wp, prefix + '.pdf')
-                        # Figures are built first and the PDF is opened only if
-                        # there is at least one: a PdfPages closed with zero
-                        # pages writes no file at all, so the old "open, then
-                        # delete if empty" shape raised FileNotFoundError on
-                        # every combination with no entries.
-                        figures = []
-                        for var in ctrl_vars_for(chan):
-                            edges = ctrl_binning(var, flav, cfg)
-                            for part in ('loose', 'tight'):
-                                def grab(component, moment):
-                                    return total.get(
-                                        ('plot', wp, chan, bcat, flav, i, var,
-                                         part, component, moment),
-                                        np.zeros(len(edges) - 1))
-                                data = grab('data', 'sumw')
-                                data2 = grab('data', 'sumw2')
-                                stack = []
-                                for label in components_all:
-                                    y = grab(label, 'sumw')
-                                    if np.any(y):
-                                        stack.append((label, y, grab(label, 'sumw2')))
-                                if not np.any(data) and not stack:
-                                    continue
-                                fig = one_control_plot(
-                                    plt, edges, data, data2, stack, colour,
-                                    xlabel=CTRL_VARS[var][1],
-                                    lumi=cfg['lumi'],
-                                    header=f'{REGION_LABELS[chan]} | '
-                                           f'{flav} lepton {i} | {part}'
-                                           + ('' if bcat == 'incl'
-                                              else f' | {bcat}'),
-                                    wp=wp)
-                                figures.append(fig)
-                        if figures:
+            bcat = ctrl_bcat_for(chan, cfg['ctrl_bcat'])
+            for flav in ('ele', 'mu'):
+                if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
+                    continue
+                for i in range(1 if chan == '1l' else 2):
+                    for var in cfg['ctrl_vars']:
+                        if var == 'mll' and chan == '1l':
+                            continue
+                        edges = ctrl_binning(var, flav, cfg)
+
+                        def grab(component, part, moment):
+                            return total.get(
+                                ('plot', wp, chan, bcat, flav, i, var, part,
+                                 component, moment),
+                                np.zeros(len(edges) - 1))
+
+                        for part in ('loose', 'tight'):
+                            data = grab('data', part, 'sumw')
+                            data2 = grab('data', part, 'sumw2')
+                            # prompt and nonprompt are summed back together:
+                            # the split is for the fake-rate maps, a control
+                            # plot wants the processes a reader recognises
+                            stack = []
+                            for group in MC_GROUPS:
+                                y = np.zeros(len(edges) - 1)
+                                y2 = np.zeros(len(edges) - 1)
+                                for sample in MC_SAMPLES:
+                                    if group_of(sample) != group:
+                                        continue
+                                    for origin in ('prompt', 'nonprompt'):
+                                        label = f'{sample}_{origin}'
+                                        y = y + grab(label, part, 'sumw')
+                                        y2 = y2 + grab(label, part, 'sumw2')
+                                if np.any(y):
+                                    stack.append((group, y, y2))
+                            if not np.any(data) and not stack:
+                                continue
+                            tag = '' if bcat == 'incl' else f'_{bcat}'
+                            name = (f'{chan}{tag}_{flav}_lep{i}_{var}_{part}.png')
+                            path = os.path.join(base, wp, name)
                             os.makedirs(os.path.dirname(path), exist_ok=True)
-                            with PdfPages(path) as pdf:
-                                for fig in figures:
-                                    pdf.savefig(fig)
-                            files_written += 1
-                        for fig in figures:
+                            fig = one_control_plot(
+                                plt, edges, data, data2, stack,
+                                xlabel=CTRL_VARS[var][1].replace(
+                                    'lepton', f'lepton {i + 1}'),
+                                lumi=cfg['lumi'],
+                                header=f'{REGION_LABELS[chan]}'
+                                       + ('' if bcat == 'incl' else f', {bcat}')
+                                       + f' | lepton {i + 1} ({flav}) | {part}',
+                                wp=wp)
+                            fig.savefig(path, dpi=140)
                             plt.close(fig)
-    return files_written
+                            written.append(path)
+    return len(written)
 
 
-def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
-                     header, wp):
+def one_control_plot(plt, edges, data, data2, stack, xlabel, lumi, header, wp):
     """CMS-style data/MC comparison with a ratio panel. Returns the figure."""
     fig, (ax, rax) = plt.subplots(
-        2, 1, figsize=(7.5, 7.), sharex=True,
+        2, 1, figsize=(7., 6.6), sharex=True,
         gridspec_kw={'height_ratios': [3, 1], 'hspace': .06})
     width = np.diff(edges)
     centers = (edges[:-1] + edges[1:]) / 2
@@ -549,48 +570,46 @@ def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
     for label, y, y2 in stack:
         if can_stack:
             ax.bar(edges[:-1], y, width=width, bottom=bottom, align='edge',
-                   color=colour.get(label), edgecolor='black', linewidth=.3,
-                   label=label)
+                   color=GROUP_COLOURS.get(label, '#9e9e9e'),
+                   edgecolor='black', linewidth=.4, label=label)
             bottom = bottom + y
         else:
-            ax.stairs(y, edges, label=label, color=colour.get(label))
+            ax.stairs(y, edges, label=label,
+                      color=GROUP_COLOURS.get(label, '#9e9e9e'))
         total_mc = total_mc + y
         total_mc2 = total_mc2 + y2
     if stack and can_stack:
         ax.bar(edges[:-1], 2 * np.sqrt(total_mc2), width=width,
                bottom=total_mc - np.sqrt(total_mc2), align='edge',
-               facecolor='none', edgecolor='gray', hatch='////', linewidth=0,
-               label='MC stat')
+               facecolor='none', edgecolor='black', hatch='/////',
+               linewidth=0, label='MC stat')
     shown = data > 0
     ax.errorbar(centers[shown], data[shown], yerr=np.sqrt(data2[shown]),
-                fmt='ko', markersize=4, label='Data', zorder=5)
+                fmt='ko', markersize=4.5, label='Data', zorder=5)
     ax.set_ylabel('Events / bin')
     # Zoom on the bins that hold something. The binning is global across
-    # regions, so mll in the DY CR would otherwise live in a twentieth of the
-    # axis. Nothing is hidden: bins outside the view are empty in both data
-    # and MC by construction.
+    # regions, so a variable would otherwise live in a fraction of the axis.
+    # Nothing is hidden: bins outside the view are empty in data and in MC.
     filled = np.nonzero((data != 0) | (total_mc != 0))[0]
     if len(filled):
-        lo = edges[max(filled[0] - 1, 0)]
-        hi = edges[min(filled[-1] + 2, len(edges) - 1)]
-        ax.set_xlim(lo, hi)
+        ax.set_xlim(edges[max(filled[0] - 1, 0)],
+                    edges[min(filled[-1] + 2, len(edges) - 1)])
     else:
         ax.set_xlim(edges[0], edges[-1])
-    top = max(data.max() if len(data) else 0., total_mc.max() if len(total_mc) else 0.)
+    top = max(data.max() if len(data) else 0.,
+              total_mc.max() if len(total_mc) else 0.)
     if top > 0:
-        ax.set_ylim(0., 1.45 * top)
-    ax.legend(fontsize=7, ncol=3, loc='upper right', framealpha=.9)
+        ax.set_ylim(0., 1.5 * top)
+    ax.legend(fontsize=8, ncol=3, loc='upper right', framealpha=.9)
     ax.grid(alpha=.15)
-    # CMS header, outside the frame
     ax.text(0., 1.012, 'CMS', transform=ax.transAxes, fontweight='bold',
             fontsize=15, va='bottom')
-    ax.text(.115, 1.015, 'Preliminary', transform=ax.transAxes, style='italic',
+    ax.text(.125, 1.015, 'Preliminary', transform=ax.transAxes, style='italic',
             fontsize=11, va='bottom')
     ax.text(1., 1.015, f'{lumi:.1f} fb$^{{-1}}$ (13.6 TeV)',
             transform=ax.transAxes, fontsize=10, va='bottom', ha='right')
     ax.text(.03, .955, header + f'\n{wp}', transform=ax.transAxes, fontsize=7.5,
             va='top', ha='left')
-    # ratio panel: points only where both sides are defined
     ok = (total_mc > 0) & (data > 0)
     vals = np.full(len(width), np.nan)
     errs = np.full(len(width), np.nan)
@@ -600,11 +619,11 @@ def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
     good = total_mc > 0
     band[good] = np.sqrt(total_mc2[good]) / total_mc[good]
     rax.bar(edges[:-1], 2 * band, width=width, bottom=1 - band, align='edge',
-            facecolor='none', edgecolor='gray', hatch='////', linewidth=0)
+            facecolor='none', edgecolor='black', hatch='/////', linewidth=0)
     rlo, rhi = 0., 2.
     inside = ok & (vals >= rlo) & (vals <= rhi)
     rax.errorbar(centers[inside], vals[inside], yerr=errs[inside],
-                 fmt='ko', markersize=4)
+                 fmt='ko', markersize=4.5)
     # A point off the scale is drawn as a triangle at the edge. Dropping it
     # silently would make 'data/MC is 40 here' indistinguishable from 'no data
     # in this bin', which is exactly the case worth seeing.
@@ -612,7 +631,7 @@ def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
                                (ok & (vals < rlo), rlo, 'v')):
         if mask.any():
             rax.plot(centers[mask], np.full(mask.sum(), ypos), marker,
-                     color='red', markersize=5, clip_on=False)
+                     color='red', markersize=5.5, clip_on=False)
     rax.axhline(1., color='gray', linestyle='--', linewidth=.8)
     rax.set_ylabel('Data / MC', fontsize=9)
     rax.set_xlabel(xlabel)
@@ -620,7 +639,7 @@ def one_control_plot(plt, edges, data, data2, stack, colour, xlabel, lumi,
     rax.grid(alpha=.2)
     # explicit margins rather than tight_layout(), which warns on every figure
     # because the shared-x gridspec is not compatible with it
-    fig.subplots_adjust(left=.11, right=.97, top=.93, bottom=.08)
+    fig.subplots_adjust(left=.11, right=.97, top=.93, bottom=.09)
     return fig
 
 
@@ -679,7 +698,14 @@ def main():
                     help='b-category of the QCD and DY control plots '
                          '(default incl). The top CR ignores it: it requires '
                          'a b-tag by definition')
+    ap.add_argument('--ctrl-var', action='append', choices=list(CTRL_VARS),
+                    default=[],
+                    help=f'control-plot variables '
+                         f'(default: {" ".join(DEFAULT_CTRL_VARS)})')
     ap.add_argument('--no-plots', action='store_true')
+    ap.add_argument('--plots-only', action='store_true',
+                    help='make the control plots and skip the fake/prompt rate '
+                         'maps entirely. Does not need ROOT')
     args = ap.parse_args()
     for name, value in (('--fraction', args.fraction),
                         ('--data-fraction', args.data_fraction)):
@@ -722,6 +748,7 @@ def main():
                  f'{unknown_ctrl}')
     cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
                ctrl_regions=args.ctrl_region or list(CTRL_REGIONS),
+               ctrl_vars=args.ctrl_var or list(DEFAULT_CTRL_VARS),
                ctrl_bcat=args.ctrl_bcat,
                all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats, bins=bins,
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
@@ -729,6 +756,7 @@ def main():
                retries=args.retries, top_met_min=args.top_met_min,
                top_mll_min=args.top_mll_min, top_min_btags=args.top_min_btags)
     print(f'Control plots: regions {args.ctrl_region or list(CTRL_REGIONS)}, '
+          f'variables {args.ctrl_var or list(DEFAULT_CTRL_VARS)}, '
           f'b-category {args.ctrl_bcat}, WPs {ctrl_wps}', flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
           f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
@@ -784,6 +812,8 @@ def main():
         return total.get(('map', name, part, source, moment), np.zeros(shape))
     written = 0
     for name, flav, _, kind, _, wp, _ in maps:
+        if args.plots_only:
+            break
         xb, yb = bins[flav]
         Td, Td2 = grab(name, 'tight', 'data', 'sumw', flav), grab(name, 'tight', 'data', 'sumw2', flav)
         Rd, Rd2 = grab(name, 'rest', 'data', 'sumw', flav), grab(name, 'rest', 'data', 'sumw2', flav)
@@ -815,7 +845,7 @@ def main():
     print(f'Wrote {written} ROOT maps in {base}')
     if not args.no_plots:
         nplots = make_plots(total, cfg, os.path.join(base, 'plots'))
-        print(f'Wrote {nplots} control PDFs in {base}/plots')
+        print(f'Wrote {nplots} control PNGs in {base}/plots')
     print(f'Read warnings/errors: {len(problems)}')
 
 
