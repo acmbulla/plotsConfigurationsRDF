@@ -26,7 +26,7 @@ import shutil
 import subprocess
 import traceback
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 import numpy as np
 
@@ -113,8 +113,97 @@ def map_definitions(ele_wps, mu_wps, bcats):
     return out
 
 
+def spread(seq, keep):
+    """`keep` elements of `seq`, evenly spaced, first and last included.
+
+    Evenly spaced and not seq[:keep]: the file list is sorted by name, so a head
+    cut lands inside a single dataset (all of DATA_EGamma0, no MC at all), while
+    a spread covers every dataset and era the sample is made of.
+    """
+    if keep >= len(seq) or keep <= 0:
+        return list(seq)
+    if keep == 1:
+        return [seq[0]]
+    step = (len(seq) - 1) / (keep - 1)
+    return [seq[round(i * step)] for i in range(keep)]
+
+
+def count_entries(paths, workers):
+    """num_entries per file, read from the TTree header only.
+
+    Cheap compared with reading the branches -- a few kB per file -- but not
+    free over xrootd, which is why it runs only when something was subsampled.
+    A file that cannot be read returns None and the caller falls back.
+    """
+    import uproot
+
+    def one(path):
+        try:
+            with uproot.open(f'{path}:{TREE}') as t:
+                return path, t.num_entries
+        except Exception:
+            return path, None
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        return dict(pool.map(one, paths))
+
+
+def select_files(files, fraction, data_fraction, cap, workers):
+    """Pick the files to read per sample and the weight scale for each.
+
+    Returns (payload_files, report). The scale is entries(all)/entries(kept)
+    when the headers are readable and the file-count ratio otherwise, computed
+    per sample so a fraction applied to DY does not touch top.
+    """
+    by_sample = defaultdict(list)
+    unknown = []
+    for path in files:
+        sample, is_data = sample_of(path)
+        if sample is None:
+            # kept, not dropped: process_file reports it, and that report is how
+            # a sample missing from MC_SAMPLES gets noticed.
+            unknown.append(path)
+            continue
+        by_sample[(sample, is_data)].append(path)
+    kept, report, subsampled = {}, [], False
+    for (sample, is_data), paths in sorted(by_sample.items()):
+        frac = data_fraction if is_data else fraction
+        keep = len(paths)
+        if 0. < frac < 1.:
+            keep = max(1, round(len(paths) * frac))
+        if cap:
+            keep = min(keep, cap)
+        chosen = spread(paths, keep)
+        kept[(sample, is_data)] = (paths, chosen)
+        if len(chosen) < len(paths):
+            subsampled = True
+    if not subsampled:
+        return [(p, 1.) for p in files], ['Full sample: every file, scale 1']
+    for (sample, is_data), (paths, chosen) in sorted(kept.items()):
+        scale, how = 1., 'all files'
+        if len(chosen) < len(paths):
+            entries = count_entries(paths, workers)
+            total = sum(v for v in entries.values() if v is not None)
+            used = sum(entries[p] for p in chosen if entries[p] is not None)
+            if used > 0 and total > 0 and all(entries[p] is not None for p in paths):
+                scale, how = total / used, f'{total} -> {used} entries'
+            elif used > 0 and total > 0:
+                scale = total / used
+                how = f'{total} -> {used} entries, some headers unreadable'
+            else:
+                scale = len(paths) / len(chosen)
+                how = f'{len(paths)} -> {len(chosen)} files (no entry counts)'
+        kept[(sample, is_data)] = (chosen, scale)
+        report.append(f'  {sample:6s} {len(chosen):4d}/{len(paths):4d} files  '
+                      f'scale {scale:7.3f}  ({how})')
+    payload_files = [(p, scale) for _, (chosen, scale) in sorted(kept.items())
+                     for p in chosen]
+    payload_files += [(p, 1.) for p in unknown]
+    return payload_files, report
+
+
 def process_file(payload):
-    path, cfg = payload
+    path, cfg, scale = payload
     import awkward as ak
     import uproot
     sample, is_data = sample_of(path)
@@ -156,9 +245,14 @@ def process_file(payload):
     pt = pad2(a['SelLep_pt'], np.nan).astype(float)
     eta = pad2(a['SelLep_eta'], np.nan).astype(float)  # SIGNED eta
     pdg = np.abs(pad2(a['SelLep_pdgId']).astype(int))
-    weight = (ak.to_numpy(a['METFilter_DATA']).astype(float) if is_data else
-              ak.to_numpy(a['XSWeight']).astype(float) *
-              ak.to_numpy(a['METFilter_Common']).astype(float) * cfg['lumi'])
+    # scale != 1 only when this sample was subsampled: it is
+    # entries(all files) / entries(files read), so the sum of weights estimates
+    # the full sample.  Unbiased, but the statistical error of the subtraction
+    # grows as sqrt(scale) -- see the warning main() prints.
+    weight = scale * (
+        ak.to_numpy(a['METFilter_DATA']).astype(float) if is_data else
+        ak.to_numpy(a['XSWeight']).astype(float) *
+        ak.to_numpy(a['METFilter_Common']).astype(float) * cfg['lumi'])
     fired = np.zeros(n, dtype=bool)
     for trigger in thave:
         fired |= ak.to_numpy(a[trigger]).astype(bool)
@@ -413,12 +507,29 @@ def main():
     ap.add_argument('--eta-bins-mu', type=parse_bins, default=parse_bins(DEFAULT_ETA))
     ap.add_argument('--workers', type=int, default=8)
     ap.add_argument('--retries', type=int, default=2)
-    ap.add_argument('--max-files', type=int, default=0)
+    ap.add_argument('--max-files', type=int, default=0,
+                    help='blunt global head cut on the sorted list; for a test '
+                         'prefer --max-files-per-sample, which keeps every '
+                         'sample alive')
+    ap.add_argument('--fraction', type=float, default=1.,
+                    help='read this fraction of the MC files of each sample '
+                         'and scale the weights back up by the exact entry '
+                         'ratio (0.25 = a quarter, weight x4)')
+    ap.add_argument('--data-fraction', type=float, default=1.,
+                    help='same for DATA. Default 1: subsampling data only adds '
+                         'noise to a measurement. Use it for a smoke test')
+    ap.add_argument('--max-files-per-sample', type=int, default=0,
+                    help='cap per sample, evenly spread over its datasets, '
+                         'applied on top of the fractions')
     ap.add_argument('--top-met-min', type=float, default=30.)
     ap.add_argument('--top-mll-min', type=float, default=12.)
     ap.add_argument('--top-min-btags', type=int, default=1)
     ap.add_argument('--no-plots', action='store_true')
     args = ap.parse_args()
+    for name, value in (('--fraction', args.fraction),
+                        ('--data-fraction', args.data_fraction)):
+        if not 0. < value <= 1.:
+            ap.error(f'{name} must be in (0, 1]')
     files = list_snapshots(args.snapshot)
     if args.max_files:
         files = files[:args.max_files]
@@ -461,7 +572,18 @@ def main():
           f'nbtag>={args.top_min_btags}', flush=True)
     total = {}
     problems = []
-    payloads = [(f, cfg) for f in files]
+    selected, report = select_files(files, args.fraction, args.data_fraction,
+                                   args.max_files_per_sample, args.workers)
+    for line in report:
+        print(line, flush=True)
+    if len(selected) < len(files):
+        print(f'SUBSAMPLED: reading {len(selected)} of {len(files)} files. '
+              'The weights are scaled back up, so the central values are '
+              'unbiased, but the subtracted MC carries sqrt(scale) more '
+              'statistical error and the uncertainties written out are '
+              'correspondingly larger. Not a result to publish.', flush=True)
+    files = [p for p, _ in selected]
+    payloads = [(p, cfg, scale) for p, scale in selected]
     def merge(acc, msgs):
         problems.extend(msgs)
         for key, value in acc.items():
