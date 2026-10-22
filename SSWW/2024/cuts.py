@@ -4,15 +4,15 @@
 #   (the >= 5 veto stays on the full collection: it stands in for the AN's veto
 #   on five or more *loose* leptons)
 # - leading lepton pT > 25; the subleading > 10 is implied by nLepSel > 1
-# - at least 2 jets with pT > 50 and |eta| < 5
+# - at least 2 jets with pT > 30 and |eta| < 5
 # ------------------------------------------------
 supercut = (
     '  nLepSel > 1'
     ' && Lepton_pt.size() < 5'
     ' && (Lepton_pt.size() > 0 ? Lepton_pt[0] : -99) > 25'
     ' && CleanJet_pt.size() > 1'
-    ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 50'
-    ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 50'
+    ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 30'
+    ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 30'
     ' && (CleanJet_pt.size() > 0 ? abs(CleanJet_eta[0]) : 99) < 5.0'
     ' && (CleanJet_pt.size() > 1 ? abs(CleanJet_eta[1]) : 99) < 5.0'
 )

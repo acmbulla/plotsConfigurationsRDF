@@ -2,7 +2,7 @@
 
 tag = 'SSWW'
 # tagger = 'SSWW_260923_test24'
-tagger = '261017_24DNNTrainings'
+tagger = '261022_24DNNTrainings'
 # tagger = '261014_vdebug3_24'
 
 # used by mkShape to define output directory for root files
