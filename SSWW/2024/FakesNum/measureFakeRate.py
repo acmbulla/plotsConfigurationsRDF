@@ -417,68 +417,77 @@ def make_plots(total, cfg, base):
                         # Each PDF contains two pages: loose and tight.
                         prefix = f'{wp}_{chan}_{bcat}_{flav}_lep{i}'
                         path = os.path.join(base, wp, prefix + '.pdf')
-                        os.makedirs(os.path.dirname(path), exist_ok=True)
-                        any_entries = False
-                        with PdfPages(path) as pdf:
-                            for part in ('loose', 'tight'):
-                                def grab(component, moment):
-                                    return total.get(('plot', wp, chan, bcat, flav, i,
-                                                      part, component, moment),
-                                                     np.zeros(len(xb)-1))
-                                data, data2 = grab('data', 'sumw'), grab('data', 'sumw2')
-                                components = []
-                                for sample in MC_SAMPLES:
-                                    for origin in ('prompt', 'nonprompt'):
-                                        label = f'{sample}_{origin}'
-                                        y = grab(label, 'sumw')
-                                        if np.any(y):
-                                            components.append((label, y))
-                                if not np.any(data) and not components:
-                                    continue
-                                any_entries = True
-                                fig, (ax, ratioax) = plt.subplots(
-                                    2, 1, figsize=(9, 7), sharex=True,
-                                    gridspec_kw={'height_ratios': [3, 1], 'hspace': .08})
-                                width = np.diff(xb)
-                                bottom = np.zeros(len(width))
-                                # Stacking signed MC is not mathematically meaningful for
-                                # negative bins: stack only if all components nonnegative.
-                                can_stack = all(np.all(y >= 0) for _, y in components)
-                                if can_stack:
-                                    for label, y in components:
-                                        ax.bar(xb[:-1], y, width=width, bottom=bottom,
-                                               align='edge', alpha=.75, label=label)
-                                        bottom += y
-                                else:
-                                    for label, y in components:
-                                        ax.stairs(y, xb, label=label)
-                                        bottom += y
-                                centers = (xb[:-1] + xb[1:]) / 2
-                                ax.errorbar(centers, data, yerr=np.sqrt(data2),
-                                            fmt='ko', label='DATA', markersize=4)
-                                ax.set_ylabel('Weighted events / bin')
-                                ax.set_title(f'{chan} | {bcat} | {flav} lep{i} | {wp} | {part}\n'
-                                             f'Inclusive in signed eta')
-                                ax.legend(fontsize=7, ncol=3)
-                                ax.grid(alpha=.15)
-                                ok = bottom > 0
-                                vals = np.full(len(bottom), np.nan)
-                                errs = np.full(len(bottom), np.nan)
-                                vals[ok] = data[ok] / bottom[ok]
-                                errs[ok] = np.sqrt(data2[ok]) / bottom[ok]
-                                ratioax.errorbar(centers, vals, yerr=errs,
-                                                 fmt='ko', markersize=4)
-                                ratioax.axhline(1, color='gray', linestyle='--')
-                                ratioax.set_ylabel('Data / MC')
-                                ratioax.set_xlabel(r'$p_T$ [GeV]')
-                                ratioax.grid(alpha=.2)
-                                fig.tight_layout()
-                                pdf.savefig(fig)
-                                plt.close(fig)
-                        if any_entries:
+                        # Figures are built first and the PDF is opened only if
+                        # there is at least one: a PdfPages closed with zero
+                        # pages writes no file at all, so the old "open, then
+                        # delete if empty" shape raised FileNotFoundError on
+                        # every combination with no entries.
+                        figures = []
+                        for part in ('loose', 'tight'):
+                            def grab(component, moment):
+                                return total.get(('plot', wp, chan, bcat, flav, i,
+                                                  part, component, moment),
+                                                 np.zeros(len(xb)-1))
+                            data, data2 = grab('data', 'sumw'), grab('data', 'sumw2')
+                            components = []
+                            for sample in MC_SAMPLES:
+                                for origin in ('prompt', 'nonprompt'):
+                                    label = f'{sample}_{origin}'
+                                    y = grab(label, 'sumw')
+                                    if np.any(y):
+                                        components.append((label, y))
+                            if not np.any(data) and not components:
+                                continue
+                            fig, (ax, ratioax) = plt.subplots(
+                                2, 1, figsize=(9, 7), sharex=True,
+                                gridspec_kw={'height_ratios': [3, 1], 'hspace': .08})
+                            width = np.diff(xb)
+                            bottom = np.zeros(len(width))
+                            # Stacking signed MC is not mathematically meaningful for
+                            # negative bins: stack only if all components nonnegative.
+                            can_stack = all(np.all(y >= 0) for _, y in components)
+                            if can_stack:
+                                for label, y in components:
+                                    ax.bar(xb[:-1], y, width=width, bottom=bottom,
+                                           align='edge', alpha=.75, label=label)
+                                    bottom += y
+                            else:
+                                for label, y in components:
+                                    ax.stairs(y, xb, label=label)
+                                    bottom += y
+                            centers = (xb[:-1] + xb[1:]) / 2
+                            ax.errorbar(centers, data, yerr=np.sqrt(data2),
+                                        fmt='ko', label='DATA', markersize=4)
+                            ax.set_ylabel('Weighted events / bin')
+                            ax.set_title(f'{chan} | {bcat} | {flav} lep{i} | {wp} | {part}\n'
+                                         f'Inclusive in signed eta')
+                            ax.legend(fontsize=7, ncol=3)
+                            ax.grid(alpha=.15)
+                            ok = bottom > 0
+                            vals = np.full(len(bottom), np.nan)
+                            errs = np.full(len(bottom), np.nan)
+                            vals[ok] = data[ok] / bottom[ok]
+                            errs[ok] = np.sqrt(data2[ok]) / bottom[ok]
+                            ratioax.errorbar(centers, vals, yerr=errs,
+                                             fmt='ko', markersize=4)
+                            ratioax.axhline(1, color='gray', linestyle='--')
+                            ratioax.set_ylabel('Data / MC')
+                            ratioax.set_xlabel(r'$p_T$ [GeV]')
+                            ratioax.grid(alpha=.2)
+                            # explicit margins rather than tight_layout(), which
+                            # warns on every figure because the shared-x gridspec
+                            # is not compatible with it
+                            fig.subplots_adjust(left=.09, right=.98, top=.90,
+                                                bottom=.09)
+                            figures.append(fig)
+                        if figures:
+                            os.makedirs(os.path.dirname(path), exist_ok=True)
+                            with PdfPages(path) as pdf:
+                                for fig in figures:
+                                    pdf.savefig(fig)
                             files_written += 1
-                        else:
-                            os.remove(path)
+                        for fig in figures:
+                            plt.close(fig)
     return files_written
 
 
