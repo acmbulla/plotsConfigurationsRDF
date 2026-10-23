@@ -161,6 +161,18 @@ def hist1(x, w, bins):
 
 
 def map_definitions(ele_wps, mu_wps, bcats):
+    """One entry per output map.
+
+    The fake rate is measured in every requested b category: which jet made
+    the fake matters, and a lepton from a b or c decay has a different rate
+    from a light-jet fake, with a different weight in the measurement and in
+    the application region.
+
+    The prompt rate is measured inclusively and only there. It lives under the
+    Z peak on prompt leptons, where a b requirement selects top rather than a
+    different kind of prompt lepton, and splitting it would only divide the
+    statistics of a quantity that does not depend on the split.
+    """
     out = []
     for flav, wps, tag, sf in (('ele', ele_wps, 'Ele', 'ee'),
                                 ('mu', mu_wps, 'Muon', 'mumu')):
@@ -172,9 +184,11 @@ def map_definitions(ele_wps, mu_wps, bcats):
                     (f'{tag}FR_{sf}_lep1_{bcat}', flav, 1, 'FR', 'ss_sf', wp, bcat),
                     (f'{tag}FR_emu_lep0_{bcat}', flav, 0, 'FR', 'ss_df', wp, bcat),
                     (f'{tag}FR_emu_lep1_{bcat}', flav, 1, 'FR', 'ss_df', wp, bcat),
-                    (f'{tag}PR_{sf}_lep0_{bcat}', flav, 0, 'PR', 'dy', wp, bcat),
-                    (f'{tag}PR_{sf}_lep1_{bcat}', flav, 1, 'PR', 'dy', wp, bcat),
                 ])
+            out.extend([
+                (f'{tag}PR_{sf}_lep0', flav, 0, 'PR', 'dy', wp, 'incl'),
+                (f'{tag}PR_{sf}_lep1', flav, 1, 'PR', 'dy', wp, 'incl'),
+            ])
     return out
 
 
@@ -1276,7 +1290,7 @@ def main():
                             if k.startswith('Lepton_isTightMuon_'))
     if not args.merge and not ele_wps and not mu_wps:
         ap.error('No tight working points found')
-    bcats = args.bcat or ['bveto', 'btag']
+    bcats = args.bcat or ['incl', 'bveto', 'btag']
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
             'mu': (args.pt_bins, args.eta_bins_mu)}
     maps = map_definitions(ele_wps, mu_wps, bcats)
