@@ -423,7 +423,30 @@ def process_file(payload):
                         labels = [('data', np.ones(len(w), dtype=bool))] if is_data else [
                             (sample + '_prompt', prompt[sel, i]),
                             (sample + '_nonprompt', ~prompt[sel, i])]
+                        # pT and eta are kept as ONE 2D histogram and
+                        # projected at plot time, not as two 1D ones. A scale
+                        # factor that is a function of (pT, eta) can be applied
+                        # bin by bin to this and then projected; from a 1D pT
+                        # projection the eta dependence is already gone and the
+                        # reweighting is no longer possible.
+                        xpt = np.clip(pt[sel, i], xb[0],
+                                      np.nextafter(xb[-1], -np.inf))
+                        yeta = eta[sel, i]
+                        for component, component_mask in labels:
+                            for part, partmask in (
+                                    ('loose', np.ones(len(w), dtype=bool)),
+                                    ('tight', t)):
+                                mask = component_mask & partmask
+                                if not mask.any():
+                                    continue
+                                for moment, ww in (('sumw', w[mask]),
+                                                   ('sumw2', w[mask]**2)):
+                                    acc[('plot2', wp, chan, bcat, flav, i, part,
+                                         component, moment)] = hist2(
+                                        xpt[mask], yeta[mask], ww, xb, yb)
                         for var in cfg['ctrl_vars']:
+                            if var in ('pt', 'eta'):
+                                continue          # covered by the 2D above
                             if var == 'mll' and chan == '1l':
                                 continue
                             edges = ctrl_binning(var, flav, cfg)
@@ -445,6 +468,37 @@ def process_file(payload):
                                         key = ('plot', wp, chan, bcat, flav, i,
                                                var, part, component, moment)
                                         acc[key] = hist1(x[mask], ww, edges)
+    # ---- ingredients of the DY scale factors -------------------------------
+    # data over ALL MC, in (pT, eta), per working point, flavour and lepton
+    # slot. No prompt requirement: this is a data/MC agreement correction, not
+    # a fake subtraction, so every MC event of the region counts. Kept for
+    # every WP, not only the plotted ones, so the same factors can later
+    # reweight the MC of the fake-rate maps.
+    for wp in cfg['all_wps']:
+        for flav in ('ele', 'mu'):
+            if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
+                continue
+            for i in (0, 1):
+                sel = (region['dy'] & bmask[cfg['sf_bcat']] & (nlep > i) &
+                       (pdg[:, i] == (11 if flav == 'ele' else 13)) &
+                       loose[flav][:, i] & np.isfinite(pt[:, i]) &
+                       np.isfinite(eta[:, i]) & np.isfinite(weight) &
+                       (weight != 0))
+                xb, yb = cfg['bins'][flav]
+                sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
+                if not np.any(sel):
+                    continue
+                x = np.clip(pt[sel, i], xb[0], np.nextafter(xb[-1], -np.inf))
+                y, w = eta[sel, i], weight[sel]
+                t = tight[flav, wp][sel, i]
+                for part, mask in (('tight', t), ('rest', ~t)):
+                    if not mask.any():
+                        continue
+                    for moment, ww in (('sumw', w[mask]),
+                                       ('sumw2', w[mask]**2)):
+                        acc[('sf', wp, flav, i, part,
+                             'data' if is_data else 'mc', moment)] = hist2(
+                            x[mask], y[mask], ww, xb, yb)
     return acc, messages
 
 
@@ -489,6 +543,101 @@ def group_of(sample):
     return 'other'
 
 
+def compute_sf(total, cfg):
+    """Data over MC in the DY CR, in (pT, eta), per WP, flavour, lepton slot
+    and selection level.
+
+    Returns {(wp, flav, i, part): (sf, err)} for part in tight / rest / loose.
+    'rest' is loose-but-not-tight, the denominator ingredient the subtraction
+    actually uses; 'loose' is tight + rest, which is what one looks at.
+
+    A bin where either side is empty is left at 1 and counted. No MC means
+    there is nothing to correct; no data means the ratio is not measured, and
+    taking it as 0 would silently delete that MC instead of saying so.
+    """
+    out, empty = {}, defaultdict(int)
+    for wp in cfg['all_wps']:
+        for flav in ('ele', 'mu'):
+            if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
+                continue
+            shape = (len(cfg['bins'][flav][0]) - 1,
+                     len(cfg['bins'][flav][1]) - 1)
+            for i in (0, 1):
+                def get(part, source, moment):
+                    return total.get(('sf', wp, flav, i, part, source, moment),
+                                     np.zeros(shape))
+                pieces = {}
+                for part in ('tight', 'rest'):
+                    pieces[part] = tuple(get(part, src, mom)
+                                         for src in ('data', 'mc')
+                                         for mom in ('sumw', 'sumw2'))
+                tdw, tdw2, tmw, tmw2 = pieces['tight']
+                rdw, rdw2, rmw, rmw2 = pieces['rest']
+                for part, (dw, dw2, mw, mw2) in (
+                        ('tight', (tdw, tdw2, tmw, tmw2)),
+                        ('rest', (rdw, rdw2, rmw, rmw2)),
+                        ('loose', (tdw + rdw, tdw2 + rdw2,
+                                   tmw + rmw, tmw2 + rmw2))):
+                    sf = np.ones(shape)
+                    err = np.zeros(shape)
+                    ok = (mw > 0) & (dw > 0)
+                    sf[ok] = dw[ok] / mw[ok]
+                    # ratio of two independent sums of weights
+                    err[ok] = sf[ok] * np.sqrt(dw2[ok] / dw[ok] ** 2
+                                               + mw2[ok] / mw[ok] ** 2)
+                    empty[(wp, flav, i, part)] = int((~ok).sum())
+                    out[(wp, flav, i, part)] = (sf, err)
+    return out, empty
+
+
+def report_sf(scale_factors, empty, wps):
+    """One line per map: how large the correction actually is."""
+    lines = ['DY scale factors (data/MC), applied to every MC process:']
+    for key in sorted(scale_factors):
+        wp, flav, i, part = key
+        if wp not in wps or part == 'rest':
+            continue
+        sf = scale_factors[key][0]
+        measured = sf[sf != 1.]
+        if not measured.size:
+            lines.append(f'  {flav} lep{i + 1} {part:5s}: nothing measured')
+            continue
+        lines.append(
+            f'  {flav} lep{i + 1} {part:5s}: median {np.median(measured):.3f}, '
+            f'range [{measured.min():.3f}, {measured.max():.3f}], '
+            f'{measured.size} bins measured, {empty[key]} left at 1')
+    return lines
+
+
+def plot_sf_map(plt, sf, err, xb, yb, title, path, empty):
+    """2D colz view of one scale-factor map."""
+    fig, ax = plt.subplots(figsize=(7.4, 5.4))
+    # symmetric around 1: the question is which way a bin pulls, and by how
+    # much, so the colour scale must not hide the sign
+    # 95th percentile and not the maximum: one wild bin must not flatten the
+    # colour scale over the bins that carry the information
+    measured = sf[sf != 1.]
+    spread = (np.percentile(np.abs(measured - 1.), 95)
+              if measured.size else 0.)
+    span = max(0.05, min(spread, 1.))
+    mesh = ax.pcolormesh(np.asarray(xb), np.asarray(yb), sf.T,
+                         cmap='RdBu_r', vmin=1 - span, vmax=1 + span)
+    bar = fig.colorbar(mesh, ax=ax)
+    bar.set_label('Data / MC')
+    for ix in range(sf.shape[0]):
+        for iy in range(sf.shape[1]):
+            ax.text((xb[ix] + xb[ix + 1]) / 2, (yb[iy] + yb[iy + 1]) / 2,
+                    f'{sf[ix, iy]:.2f}\n±{err[ix, iy]:.2f}',
+                    ha='center', va='center', fontsize=5.5)
+    ax.set_xlabel(r'lepton $p_{T}$ [GeV]')
+    ax.set_ylabel(r'lepton $\eta$')
+    ax.set_title(title + (f'   [{empty} bins not measured (no data or no MC), '
+                          f'left at 1]' if empty else ''), fontsize=9)
+    fig.subplots_adjust(left=.10, right=1.0, top=.92, bottom=.11)
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+
+
 def make_plots(total, cfg, base):
     """One PNG per region, lepton slot, variable and loose/tight.
 
@@ -501,6 +650,19 @@ def make_plots(total, cfg, base):
     import matplotlib.pyplot as plt
     os.makedirs(base, exist_ok=True)
     written = []
+    scale_factors, empty_bins = compute_sf(total, cfg)
+    for line in report_sf(scale_factors, empty_bins, cfg['ctrl_wps']):
+        print(line, flush=True)
+    for (wp, flav, i, part), (sf, err) in sorted(scale_factors.items()):
+        if wp not in cfg['ctrl_wps'] or part == 'rest':
+            continue
+        xb, yb = cfg['bins'][flav]
+        path = os.path.join(base, wp, f'SF_dy_{flav}_lep{i}_{part}.png')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        plot_sf_map(plt, sf, err, xb, yb,
+                    f'DY CR scale factor | {flav} lepton {i + 1} | {part}\n{wp}',
+                    path, empty_bins[(wp, flav, i, part)])
+        written.append(path)
     for wp in cfg['ctrl_wps']:
         for chan in cfg['ctrl_regions']:
             bcat = ctrl_bcat_for(chan, cfg['ctrl_bcat'])
@@ -508,54 +670,85 @@ def make_plots(total, cfg, base):
                 if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                     continue
                 for i in range(1 if chan == '1l' else 2):
+                    xb, yb = cfg['bins'][flav]
+                    shape2 = (len(xb) - 1, len(yb) - 1)
                     for var in cfg['ctrl_vars']:
                         if var == 'mll' and chan == '1l':
                             continue
+                        twod = var in ('pt', 'eta')
                         edges = ctrl_binning(var, flav, cfg)
+                        # The (pT, eta) histogram is stored whole and projected
+                        # here, which is what makes the reweighted version
+                        # possible; the other variables are 1D and are drawn
+                        # unweighted, since the factor is not a function of them.
+                        axis = 1 if var == 'pt' else 0
 
-                        def grab(component, part, moment):
-                            return total.get(
-                                ('plot', wp, chan, bcat, flav, i, var, part,
-                                 component, moment),
-                                np.zeros(len(edges) - 1))
+                        def grab(component, part, moment, weights=None):
+                            if not twod:
+                                return total.get(
+                                    ('plot', wp, chan, bcat, flav, i, var, part,
+                                     component, moment),
+                                    np.zeros(len(edges) - 1))
+                            h = total.get(('plot2', wp, chan, bcat, flav, i,
+                                           part, component, moment),
+                                          np.zeros(shape2))
+                            if weights is not None:
+                                power = 2 if moment == 'sumw2' else 1
+                                h = h * weights ** power
+                            return h.sum(axis=axis)
 
                         for part in ('loose', 'tight'):
                             data = grab('data', part, 'sumw')
                             data2 = grab('data', part, 'sumw2')
-                            # prompt and nonprompt are summed back together:
-                            # the split is for the fake-rate maps, a control
-                            # plot wants the processes a reader recognises
-                            stack = []
-                            for group in MC_GROUPS:
-                                y = np.zeros(len(edges) - 1)
-                                y2 = np.zeros(len(edges) - 1)
-                                for sample in MC_SAMPLES:
-                                    if group_of(sample) != group:
-                                        continue
-                                    for origin in ('prompt', 'nonprompt'):
-                                        label = f'{sample}_{origin}'
-                                        y = y + grab(label, part, 'sumw')
-                                        y2 = y2 + grab(label, part, 'sumw2')
-                                if np.any(y):
-                                    stack.append((group, y, y2))
-                            if not np.any(data) and not stack:
-                                continue
-                            tag = '' if bcat == 'incl' else f'_{bcat}'
-                            name = (f'{chan}{tag}_{flav}_lep{i}_{var}_{part}.png')
-                            path = os.path.join(base, wp, name)
-                            os.makedirs(os.path.dirname(path), exist_ok=True)
-                            fig = one_control_plot(
-                                plt, edges, data, data2, stack,
-                                xlabel=CTRL_VARS[var][1].replace(
-                                    'lepton', f'lepton {i + 1}'),
-                                lumi=cfg['lumi'],
-                                header=f'{REGION_LABELS[chan]}'
-                                       + ('' if bcat == 'incl' else f', {bcat}')
-                                       + f' | lepton {i + 1} ({flav}) | {part}',
-                                wp=wp)
-                            fig.savefig(path, dpi=140)
-                            plt.close(fig)
-                            written.append(path)
+                            # Pre-reweighting always; post-reweighting as well
+                            # when a factor exists for this lepton and level.
+                            passes = [('', None)]
+                            key = (wp, flav, i, part)
+                            if twod and key in scale_factors:
+                                passes.append(('_sf', scale_factors[key][0]))
+                            for suffix, sfmap in passes:
+                                # prompt and nonprompt are summed back together:
+                                # the split is for the fake-rate maps, a control
+                                # plot wants the processes a reader recognises
+                                stack = []
+                                for group in MC_GROUPS:
+                                    y = np.zeros(len(edges) - 1)
+                                    y2 = np.zeros(len(edges) - 1)
+                                    for sample in MC_SAMPLES:
+                                        if group_of(sample) != group:
+                                            continue
+                                        for origin in ('prompt', 'nonprompt'):
+                                            label = f'{sample}_{origin}'
+                                            y = y + grab(label, part, 'sumw',
+                                                         sfmap)
+                                            y2 = y2 + grab(label, part, 'sumw2',
+                                                           sfmap)
+                                    if np.any(y):
+                                        stack.append((group, y, y2))
+                                if not np.any(data) and not stack:
+                                    continue
+                                tag = '' if bcat == 'incl' else f'_{bcat}'
+                                name = (f'{chan}{tag}_{flav}_lep{i}_{var}_'
+                                        f'{part}{suffix}.png')
+                                path = os.path.join(base, wp, name)
+                                os.makedirs(os.path.dirname(path), exist_ok=True)
+                                fig = one_control_plot(
+                                    plt, edges, data, data2, stack,
+                                    xlabel=CTRL_VARS[var][1].replace(
+                                        'lepton', f'lepton {i + 1}'),
+                                    lumi=cfg['lumi'],
+                                    header=f'{REGION_LABELS[chan]}'
+                                           + ('' if bcat == 'incl'
+                                              else f', {bcat}')
+                                           + f' | lepton {i + 1} ({flav}) | '
+                                           f'{part}',
+                                    # on the second line, where it cannot run
+                                    # under the legend
+                                    wp=wp + ('    [MC x DY CR scale factors]'
+                                             if suffix else ''))
+                                fig.savefig(path, dpi=140)
+                                plt.close(fig)
+                                written.append(path)
     return len(written)
 
 
@@ -660,7 +853,7 @@ UNREADABLE = 'UNREADABLE'
 
 
 CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'ctrl_regions',
-                    'ctrl_vars', 'ctrl_bcat', 'bins', 'lumi')
+                    'ctrl_vars', 'ctrl_bcat', 'sf_bcat', 'bins', 'lumi')
 
 
 def dump_partial(path, acc, problems, cfg, files):
@@ -935,6 +1128,8 @@ def main():
                     default=[],
                     help=f'regions to make control plots for '
                          f'(default: {" ".join(CTRL_REGIONS)})')
+    ap.add_argument('--sf-bcat', choices=sorted(BCATS), default='incl',
+                    help='b-category the DY scale factors are derived in')
     ap.add_argument('--ctrl-bcat', choices=sorted(BCATS), default='incl',
                     help='b-category of the QCD and DY control plots '
                          '(default incl). The top CR ignores it: it requires '
@@ -1033,7 +1228,7 @@ def main():
     cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
                ctrl_regions=args.ctrl_region or list(CTRL_REGIONS),
                ctrl_vars=args.ctrl_var or list(DEFAULT_CTRL_VARS),
-               ctrl_bcat=args.ctrl_bcat,
+               ctrl_bcat=args.ctrl_bcat, sf_bcat=args.sf_bcat,
                all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats, bins=bins,
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
                loose_mu=args.loose_mu, btag_thr=BTAG_WPS[args.btag_wp],
