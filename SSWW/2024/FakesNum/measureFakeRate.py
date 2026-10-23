@@ -1427,10 +1427,15 @@ def main():
         corr, corr_e, _ = ratio(Td, Td2, Rd, Rd2,
                                 Tm * sf_t, Tm2 * sf_t ** 2,
                                 Rm * sf_r, Rm2 * sf_r ** 2, True)
-        f, e = corr, corr_e
+        # The fake rate is published subtracted and reweighted. The prompt
+        # rate is NOT: it stays the plain tight / (tight + rest) ratio of the
+        # data, which is what it is defined as. The subtracted variants are
+        # written next to it as diagnostics only.
+        f, e = (corr, corr_e) if kind == 'FR' else (raw, raw_e)
         tag = 'FR' if kind == 'FR' else 'PR'
         ingredients = {f'{tag}_pT_eta': (raw, raw_e),
                        f'{tag}_pT_eta_EWK': (ewk, ewk_e),
+                       f'{tag}_pT_eta_EWKcorr': (corr, corr_e),
                        'h_tight_data': (Td, np.sqrt(Td2)),
                        'h_rest_data': (Rd, np.sqrt(Rd2)),
                        'h_tight_mc': (Tm, np.sqrt(Tm2)),
