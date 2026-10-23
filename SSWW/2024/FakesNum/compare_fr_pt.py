@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Compare measureFakeRate.py ROOT maps after integrating their counts in eta.
 
-Per flavor/WP: one inclusive 1l/2l-lep0/2l-lep1 overlay and three
-inclusive/btag/bveto overlays. 2l combines SS SF+DF by default.
+Per flavor/WP and subtraction variant: one inclusive 1l/2l-lep0/2l-lep1
+overlay and three inclusive/btag/bveto overlays. Default: separate EWK and
+EWKcorr files, points with error bars only. 2l combines SS SF+DF.
 No ROOT Python bindings needed: numpy, uproot and matplotlib are sufficient.
 """
 from __future__ import annotations
@@ -142,7 +143,7 @@ def overlay(curves, entries, title, target, variant):
         valid = curve['valid']; pt = curve['pt_edges']; x = (pt[:-1]+pt[1:])/2
         rate, error = curve['rate'], curve['error']
         ax.errorbar(x, rate, yerr=error, xerr=np.diff(pt)/2, color=color, marker=marker,
-                    label=label, capsize=2, lw=1.2, ms=4)
+                    label=label, capsize=2, lw=1.2, ms=4, linestyle='none')
         nonphysical = valid & ~curve['physical']
         ax.scatter(x[nonphysical], rate[nonphysical], facecolors='none', edgecolors='red', s=90, zorder=5)
         bounds.extend((rate[valid]-error[valid]).tolist()+(rate[valid]+error[valid]).tolist())
@@ -167,10 +168,12 @@ def main():
     ap.add_argument('--out', type=Path, default=Path('FR_comparisons_pt'))
     ap.add_argument('--flavor', nargs='+', choices=list(TAGS), default=list(TAGS))
     ap.add_argument('--wp', action='append', help='exact WP directory name; repeat to select multiple WPs')
-    ap.add_argument('--variant', choices=['corrected','ewk','raw'], default='corrected')
+    ap.add_argument('--variant', choices=['both','corrected','ewk','raw'], default='both',
+                    help='both (default): separate EWK and EWKcorr outputs; corrected selects EWKcorr only')
     ap.add_argument('--two-lepton-channels', nargs='+', choices=['sf','df'], default=['sf','df'])
     ap.add_argument('--allow-missing', action='store_true', help='mark incomplete curves missing; never merge only part of the requested channels')
     args = ap.parse_args()
+    variants = ['ewk','corrected'] if args.variant == 'both' else [args.variant]
     channels = list(dict.fromkeys(args.two_lepton_channels))
     args.out.mkdir(parents=True,exist_ok=True)
     os.environ.setdefault('MPLCONFIGDIR',str((args.out/'.matplotlib').resolve()))
@@ -187,27 +190,29 @@ def main():
     if not groups: ap.error('No measurement ROOT maps found (expected EleFR_1l_incl.root / MuonFR_1l_incl.root and related maps)')
     prepared = []; missing = []
     for (relative,wp,flavor), files in sorted(groups.items()):
-        curves = {}; axes = None
-        for case in CASES:
-            for bcat in BCATS:
-                names = needed_names(flavor,case,bcat,channels)
-                absent = [name for name in names if name not in files]
-                if absent:
-                    missing.append(f'{relative}/{flavor}/{case}/{bcat}: '+', '.join(absent))
-                    continue
-                curve = project_pt([read_counts(files[name],args.variant) for name in names])
-                curve['sources'] = [files[name] for name in names]
-                if axes is not None:
-                    same_edges(axes[0],curve['pt_edges'],'pT');same_edges(axes[1],curve['eta_edges'],'eta')
-                axes = curve['pt_edges'],curve['eta_edges']
-                curves[f'{case}/{bcat}'] = curve
-        prepared.append((relative,wp,flavor,curves))
+        for variant in variants:
+            curves = {}; axes = None
+            for case in CASES:
+                for bcat in BCATS:
+                    names = needed_names(flavor,case,bcat,channels)
+                    absent = [name for name in names if name not in files]
+                    if absent:
+                        missing.append(f'{relative}/{flavor}/{case}/{bcat}: '+', '.join(absent))
+                        continue
+                    curve = project_pt([read_counts(files[name],variant) for name in names])
+                    curve['sources'] = [files[name] for name in names]
+                    if axes is not None:
+                        same_edges(axes[0],curve['pt_edges'],'pT');same_edges(axes[1],curve['eta_edges'],'eta')
+                    axes = curve['pt_edges'],curve['eta_edges']
+                    curves[f'{case}/{bcat}'] = curve
+            prepared.append((relative,wp,flavor,variant,curves))
     if missing and not args.allow_missing:
         ap.error('Required maps are missing:\n'+'\n'.join(missing)+'\nUse --allow-missing only for explicitly partial plots.')
-    gallery = []; manifest = dict(input=args.input,variant=args.variant,two_lepton_channels=channels,
+    gallery = []; manifest = dict(input=args.input,variant=args.variant,variants=variants,two_lepton_channels=channels,
                                   eta_integration='sum tight/rest and variances before forming the ratio',
                                   missing=missing,groups=[])
-    for relative,wp,flavor,curves in prepared:
+    for relative,wp,flavor,variant,curves in prepared:
+        variant_tag = {'ewk':'EWK','corrected':'EWKcorr','raw':'raw'}[variant]
         folder = args.out/relative/flavor;folder.mkdir(parents=True,exist_ok=True)
         context = wp if relative=='.' else relative
         plots = [('inclusive_1lep_vs_2lep',[(f'{case}/incl',label) for case,label in CASES.items()],
@@ -215,12 +220,14 @@ def main():
         plots += [(f'{case}_inclusive_bjet_bveto',[(f'{case}/{bcat}',label) for bcat,label in BCATS.items()],
                    f'{flavor} · {context} · {CASES[case]}') for case in CASES]
         for name,entries,title in plots:
-            overlay(curves,entries,title,folder/name,args.variant)
+            name = f'{name}_{variant_tag}'
+            title = f'{title} · {variant_tag}'
+            overlay(curves,entries,title,folder/name,variant)
             rel=(folder/name).relative_to(args.out).as_posix()
             gallery.append(f'<section><h2>{html.escape(title)}</h2><a href="{html.escape(rel)}.pdf">PDF</a><img src="{html.escape(rel)}.png"></section>')
         serial = {key:{field:plain(value) for field,value in curve.items()} for key,curve in curves.items()}
-        (folder/'curves.json').write_text(json.dumps(serial,indent=2,allow_nan=False))
-        with (folder/'curves.csv').open('w',newline='') as stream:
+        (folder/f'curves_{variant_tag}.json').write_text(json.dumps(serial,indent=2,allow_nan=False))
+        with (folder/f'curves_{variant_tag}.csv').open('w',newline='') as stream:
             writer=csv.writer(stream);writer.writerow(['case','bcat','pt_low','pt_high','FR','stat_error','tight_subtracted','rest_subtracted','var_tight','var_rest','valid','physical'])
             for key,c in curves.items():
                 case,bcat=key.split('/')
@@ -230,9 +237,9 @@ def main():
                                      c['tight'][i],c['rest'][i],c['var_tight'][i],c['var_rest'][i],bool(c['valid'][i]),bool(c['physical'][i])])
         invalid=sum(int((~c['valid']).sum()) for c in curves.values())
         nonphysical=sum(int((c['valid'] & ~c['physical']).sum()) for c in curves.values())
-        manifest['groups'].append(dict(directory=str(folder),wp=wp,flavor=flavor,curves=len(curves),
+        manifest['groups'].append(dict(directory=str(folder),wp=wp,flavor=flavor,variant=variant,curves=len(curves),
                                         invalid_bins=invalid,nonphysical_bins=nonphysical))
-        print(f'{relative}/{flavor}: {len(curves)} curves, 4 comparisons; invalid bins={invalid}, nonphysical={nonphysical}')
+        print(f'{relative}/{flavor}/{variant_tag}: {len(curves)} curves, 4 comparisons; invalid bins={invalid}, nonphysical={nonphysical}')
     (args.out/'manifest.json').write_text(json.dumps(manifest,indent=2))
     (args.out/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>FR vs pT</title>'
         '<style>body{font-family:system-ui;max-width:1100px;margin:2em auto}img{max-width:100%}section{border-top:1px solid #ccc}</style>'

@@ -13,16 +13,21 @@ python compare_fr_pt.py \
 oppure un URL `root://host//percorso`. Per la ricerca remota serve `xrdfs` nel
 PATH e l'autenticazione del proprio ambiente; lo script non modifica i file di input.
 
-Per ogni flavor e WP trovati vengono prodotti **quattro confronti**, PNG e PDF:
+Per ogni flavor e WP trovati vengono prodotti **quattro confronti per ciascuna variante**, PNG e PDF (punti con barre di errore, senza linee tra i punti):
 
 1. Inclusive: 1lep vs 2lep/primo leptone vs 2lep/secondo leptone.
 2. 1lep: inclusive vs bjet vs bveto.
 3. 2lep/primo leptone: inclusive vs bjet vs bveto.
 4. 2lep/secondo leptone: inclusive vs bjet vs bveto.
 
-`index.html` raccoglie i grafici. Ogni cartella flavor/WP contiene `curves.csv`
-e `curves.json` con valori, errori e ingredienti integrati; `manifest.json`
-riporta input, opzioni ed eventuali bin invalidi.
+Per default vengono prodotte **entrambe** le varianti, in file distinti:
+
+- `*_EWK.png/.pdf`: dati meno prompt MC, senza SF DY;
+- `*_EWKcorr.png/.pdf`: dati meno prompt MC con SF DY.
+
+Sono quindi otto grafici PNG/PDF per flavor/WP. `index.html` li raccoglie;
+`curves_EWK.csv/.json` e `curves_EWKcorr.csv/.json` conservano separatamente
+valori, errori e ingredienti integrati. `manifest.json` indica le varianti.
 
 ## Definizioni
 
@@ -33,9 +38,13 @@ riporta input, opzioni ed eventuali bin invalidi.
   del producer; **bveto** a `bveto`. Sono lette separatamente, senza assumere
   che bjet e bveto siano complementari. Nel producer di riferimento, btag
   richiede almeno un jet b centrale sopra30GeV e bveto nessuno sopra20GeV.
-- Default: FR corretta, dagli ingredienti `h_tight_data`, `h_rest_data`,
-  `h_tight_mc_SF`, `h_rest_mc_SF`. La sottrazione del prompt MC usa quindi gli
-  stessi fattori DY del producer, già applicati per bin2D.
+  Il default è UParTAK4B loose, soglia 0.0246, con |eta| < 2.5; è modificabile
+  in produzione con `--btag-wp` (medium 0.1272, tight 0.4648). Il compare non
+  applica una nuova WP: legge quella delle mappe prodotte.
+- EWK usa `h_tight_data`, `h_rest_data`, `h_tight_mc`, `h_rest_mc`.
+- EWKcorr usa gli stessi dati e `h_tight_mc_SF`, `h_rest_mc_SF`: i fattori
+  DY del producer sono già applicati per bin2D. Le due versioni non vengono
+  sovrapposte nello stesso grafico e non si sovrascrivono.
 - Si sommano **contenuti e varianze** nelle eta visibili, poi nei canali SF/DF
   disgiunti. Non si media la mappa FR e non si moltiplicano i conteggi per la
   larghezza dei bin eta. I dati pT oltre gli estremi seguono il folding già
@@ -69,8 +78,14 @@ python compare_fr_pt.py --input MAPPE --out CONFRONTI --flavor ele --wp NOME_WP
 # Solo il canale SS di stesso flavor per le curve2lep
 python compare_fr_pt.py --input MAPPE --two-lepton-channels sf
 
-# Confronti senza correzione SF DY, oppure dati senza sottrazione
+# Solo EWK, senza correzione SF DY
 python compare_fr_pt.py --input MAPPE --variant ewk
+
+# Solo EWKcorr (il nome CLI "corrected" resta valido)
+python compare_fr_pt.py --input MAPPE --variant corrected
+
+# Entrambi, default; oppure dati senza sottrazione
+python compare_fr_pt.py --input MAPPE --variant both
 python compare_fr_pt.py --input MAPPE --variant raw
 ```
 
@@ -96,6 +111,6 @@ python check_compare_fr_pt.py
 
 La verifica usa ROOT sintetici pesati e controlla proiezione dei conteggi,
 sottrazione con SF dipendenti da eta, unione SF/DF, propagazione degli errori,
-tutti i16 confronti per2flavor×2WP, mascheramento dei denominatori invalidi e
+tutti i32 confronti per2flavor×2WP×2varianti, assenza di linee tra punti, scelta EWK-only, mascheramento dei denominatori invalidi e
 rifiuto di mappe mancanti o prive di Sumw2. Per creare le fixture serve anche
 `boost_histogram`, che non è richiesto dallo script di confronto.
