@@ -24,6 +24,7 @@ import glob
 import os
 import shutil
 import subprocess
+import time
 import traceback
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -283,7 +284,11 @@ def process_file(payload):
                                                 'SelLep_promptgenmatched']
     cols = list(dict.fromkeys(cols))
     error = None
-    for _ in range(cfg['retries'] + 1):
+    for attempt in range(cfg['retries'] + 1):
+        if attempt:
+            # EOS I/O errors are usually transient, and an immediate retry hits
+            # the same unhappy disk server. Back off before trying again.
+            time.sleep(2 ** attempt)
         try:
             with uproot.open(f'{path}:{TREE}') as tree:
                 have = set(tree.keys())
@@ -299,7 +304,7 @@ def process_file(payload):
         except Exception as exc:
             error = exc
     else:
-        return {}, [f'{path}: unreadable ({error}); skipped']
+        return {}, [f'{UNREADABLE} {path}: {error}']
     messages = ([f'{os.path.basename(path)}: absent trigger paths {tmissing}']
                 if tmissing else [])
     n = len(a['nLepSel'])
@@ -649,13 +654,16 @@ def one_control_plot(plt, edges, data, data2, stack, xlabel, lumi, header, wp):
 # partials and makes the plots and the maps exactly as a local run would.
 # ---------------------------------------------------------------------------
 PART_PREFIX = 'part_'
+# Prefix of the message a skipped file produces, so the summary can pick those
+# out from the other warnings without parsing free text.
+UNREADABLE = 'UNREADABLE'
 
 
 CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'ctrl_regions',
                     'ctrl_vars', 'ctrl_bcat', 'bins', 'lumi')
 
 
-def dump_partial(path, acc, problems, cfg):
+def dump_partial(path, acc, problems, cfg, files):
     """Write one job's accumulator and the configuration that produced it.
 
     pickle, not npz: the keys are tuples of mixed strings and integers, which
@@ -666,8 +674,8 @@ def dump_partial(path, acc, problems, cfg):
     import pickle
     tmp = path + '.tmp'
     with open(tmp, 'wb') as fh:
-        pickle.dump({'acc': acc, 'problems': problems, 'cfg': cfg}, fh,
-                    protocol=4)
+        pickle.dump({'acc': acc, 'problems': problems, 'cfg': cfg,
+                     'files': files}, fh, protocol=4)
     os.replace(tmp, path)          # never leave a half-written part behind
 
 
@@ -675,6 +683,7 @@ def load_partials(directory):
     """Sum every part file in `directory`. Returns (total, problems, nparts)."""
     import pickle
     total, problems, nparts, cfg = {}, [], 0, None
+    seen_files = []
     for path in sorted(glob.glob(os.path.join(directory,
                                               PART_PREFIX + '*.pkl'))):
         with open(path, 'rb') as fh:
@@ -691,12 +700,13 @@ def load_partials(directory):
                     f'Resubmit the whole set.')
         nparts += 1
         problems.extend(blob['problems'])
+        seen_files.extend(blob.get('files', []))
         for key, value in blob['acc'].items():
             if key in total:
                 total[key] += value
             else:
                 total[key] = value.copy()
-    return total, problems, nparts, cfg
+    return total, problems, nparts, cfg, seen_files
 
 
 def find_credentials():
@@ -784,6 +794,40 @@ queue job in ({' '.join(str(j) for j in range(len(chunks)))})
     else:
         print('no proxy and no Kerberos ticket found: shipping neither')
     return sub, len(chunks)
+
+
+def unreadable_report(problems, files, out_path=None):
+    """Per-sample account of the files that could not be read.
+
+    The overall fraction is the wrong number to look at: losing 25 of 1294
+    files is 2%, but if 9 of them are one sample's, that sample's
+    normalisation is low by its own fraction, and the data/MC ratio moves by
+    the difference between the deficits of data and of each process.
+    """
+    bad = [line.split(' ', 1)[1].split(':')[0] for line in problems
+           if line.startswith(UNREADABLE)]
+    if not bad:
+        return []
+    per_sample = defaultdict(int)
+    for path in bad:
+        sample, _ = sample_of(path)
+        per_sample[sample or '(unknown)'] += 1
+    totals = defaultdict(int)
+    for path in files:
+        sample, _ = sample_of(path)
+        totals[sample or '(unknown)'] += 1
+    lines = [f'{len(bad)} of {len(files)} files could not be read. '
+             f'Per sample, which is what biases the normalisation:']
+    for sample in sorted(per_sample, key=lambda k: -per_sample[k]):
+        n, total = per_sample[sample], totals.get(sample, 0)
+        share = f'{100. * n / total:.1f}%' if total else '?'
+        lines.append(f'  {sample:12s} {n:4d} of {total:4d}  ({share} of that '
+                     f'sample is missing from the histograms)')
+    if out_path:
+        with open(out_path, 'w') as fh:
+            fh.write('\n'.join(sorted(bad)) + '\n')
+        lines.append(f'  list written to {out_path}')
+    return lines
 
 
 def check_batch(batch_dir):
@@ -924,6 +968,9 @@ def main():
                          'scale per line) instead of listing the snapshot')
     ap.add_argument('--dump',
                     help='internal: write the accumulator here and stop')
+    ap.add_argument('--problem-list',
+                    help='write the paths of the unreadable files here, one '
+                         'per line, ready to be deleted and regenerated')
     ap.add_argument('--plots-only', action='store_true',
                     help='make the control plots and skip the fake/prompt rate '
                          'maps entirely. Does not need ROOT')
@@ -1049,7 +1096,8 @@ def main():
     if args.merge:
         parts_dir = os.path.join(os.path.abspath(
             os.path.expandvars(args.batch_dir)), 'parts')
-        total, part_problems, nparts, job_cfg = load_partials(parts_dir)
+        (total, part_problems, nparts, job_cfg,
+         files) = load_partials(parts_dir)
         problems.extend(part_problems)
         if not nparts:
             raise SystemExit(f'No {PART_PREFIX}*.pkl in {parts_dir}')
@@ -1084,10 +1132,12 @@ def main():
             if i % 50 == 0:
                 print(f'Processed {i}/{len(files)}', flush=True)
     if args.dump:
-        dump_partial(args.dump, total, problems, cfg)
+        dump_partial(args.dump, total, problems, cfg, files)
         print(f'Wrote {args.dump}: {len(total)} histograms, '
               f'{len(problems)} warnings')
         return
+    for line in unreadable_report(problems, files, args.problem_list):
+        print(line)
     for msg in problems[:30]:
         print('WARNING:', msg)
     if len(problems) > 30:
