@@ -643,6 +643,203 @@ def one_control_plot(plt, edges, data, data2, stack, xlabel, lumi, header, wp):
     return fig
 
 
+# ---------------------------------------------------------------------------
+# HTCondor: the work is one independent pass per file, so it splits by file.
+# A job reads its own list and writes a partial accumulator; --merge sums the
+# partials and makes the plots and the maps exactly as a local run would.
+# ---------------------------------------------------------------------------
+PART_PREFIX = 'part_'
+
+
+CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'ctrl_regions',
+                    'ctrl_vars', 'ctrl_bcat', 'bins', 'lumi')
+
+
+def dump_partial(path, acc, problems, cfg):
+    """Write one job's accumulator and the configuration that produced it.
+
+    pickle, not npz: the keys are tuples of mixed strings and integers, which
+    npz cannot represent as archive names. The configuration travels with the
+    histograms so --merge needs no option repeated, and so a part produced with
+    a different binning is caught instead of being summed into the rest.
+    """
+    import pickle
+    tmp = path + '.tmp'
+    with open(tmp, 'wb') as fh:
+        pickle.dump({'acc': acc, 'problems': problems, 'cfg': cfg}, fh,
+                    protocol=4)
+    os.replace(tmp, path)          # never leave a half-written part behind
+
+
+def load_partials(directory):
+    """Sum every part file in `directory`. Returns (total, problems, nparts)."""
+    import pickle
+    total, problems, nparts, cfg = {}, [], 0, None
+    for path in sorted(glob.glob(os.path.join(directory,
+                                              PART_PREFIX + '*.pkl'))):
+        with open(path, 'rb') as fh:
+            blob = pickle.load(fh)
+        if cfg is None:
+            cfg = blob['cfg']
+        else:
+            differ = [k for k in CFG_KEYS_CHECKED
+                      if blob['cfg'].get(k) != cfg.get(k)]
+            if differ:
+                raise SystemExit(
+                    f'{os.path.basename(path)} was produced with a different '
+                    f'configuration ({", ".join(differ)}); refusing to merge. '
+                    f'Resubmit the whole set.')
+        nparts += 1
+        problems.extend(blob['problems'])
+        for key, value in blob['acc'].items():
+            if key in total:
+                total[key] += value
+            else:
+                total[key] = value.copy()
+    return total, problems, nparts, cfg
+
+
+def find_credentials():
+    """X509 proxy and Kerberos cache to ship with the jobs, if they exist.
+
+    Neither is required: EOS over root://eoscms.cern.ch takes Kerberos, a CMS
+    redirector takes the proxy, and a job that needed the missing one fails on
+    the node with xrootd's own message.
+    """
+    out = []
+    proxy = os.environ.get('X509_USER_PROXY') or f'/tmp/x509up_u{os.getuid()}'
+    if os.path.exists(proxy):
+        out.append(('X509_USER_PROXY', proxy))
+    cache = os.environ.get('KRB5CCNAME', f'FILE:/tmp/krb5cc_{os.getuid()}')
+    if cache.startswith('FILE:'):
+        cache = cache[len('FILE:'):]
+    elif ':' in cache:
+        cache = ''                 # KEYRING/KCM/DIR: no file to transfer
+    if cache and os.path.exists(cache):
+        out.append(('KRB5CCNAME', cache))
+    return out
+
+
+def write_batch(args, selected, cfg_args):
+    """Write the job scripts and the submit file. Returns the submit path."""
+    batch = os.path.abspath(os.path.expandvars(args.batch_dir))
+    parts = os.path.join(batch, 'parts')
+    logs = os.path.join(batch, 'logs')
+    for d in (batch, parts, logs):
+        os.makedirs(d, exist_ok=True)
+    per_job = args.files_per_job
+    chunks = [selected[k:k + per_job]
+              for k in range(0, len(selected), per_job)]
+    # Each line carries the file and its weight scale: the subsampling is
+    # decided once here, so a job must not recompute it from what it can see.
+    for j, chunk in enumerate(chunks):
+        with open(os.path.join(batch, f'filelist_{j}.txt'), 'w') as fh:
+            fh.write(''.join(f'{path}\t{scale!r}\n' for path, scale in chunk))
+    script = os.path.abspath(__file__)
+    creds = find_credentials()
+    cred_lines = []
+    for var, path in creds:
+        base = os.path.basename(path)
+        if var == 'KRB5CCNAME':
+            # The export is load-bearing: the submit node's KRB5CCNAME points
+            # at a path that does not exist on the execute node.
+            cred_lines.append(f'export KRB5CCNAME=FILE:$(pwd)/{base}')
+            cred_lines.append(f'chmod 600 $(pwd)/{base} 2>/dev/null || true')
+        else:
+            cred_lines.append(f'export X509_USER_PROXY=$(pwd)/{base}')
+    runner = os.path.join(batch, 'run.sh')
+    with open(runner, 'w') as fh:
+        fh.write('#!/bin/bash\n'
+                 'set -e\n'
+                 'JOB=$1\n'
+                 f'source {args.lcg_view}\n'
+                 + ''.join(line + '\n' for line in cred_lines) +
+                 f'python3 {os.path.basename(script)} \\\n'
+                 f'    --file-list filelist_${{JOB}}.txt \\\n'
+                 f'    --dump {PART_PREFIX}${{JOB}}.pkl \\\n'
+                 f'    {cfg_args}\n')
+    os.chmod(runner, 0o755)
+    transfer = [script] + [p for _, p in creds]
+    sub = os.path.join(batch, 'submit.sub')
+    with open(sub, 'w') as fh:
+        fh.write(f"""universe              = vanilla
+executable            = {runner}
+arguments             = $(job)
+output                = {logs}/job_$(job).out
+error                 = {logs}/job_$(job).err
+log                   = {logs}/condor.log
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files  = {','.join(transfer + [batch + '/filelist_$(job).txt'])}
+transfer_output_files = {PART_PREFIX}$(job).pkl
+transfer_output_remaps = "{PART_PREFIX}$(job).pkl = {parts}/{PART_PREFIX}$(job).pkl"
++JobFlavour           = "{args.job_flavour}"
+request_cpus          = {max(1, args.workers)}
+queue job in ({' '.join(str(j) for j in range(len(chunks)))})
+""")
+    print(f'{len(chunks)} jobs of up to {per_job} files in {batch}')
+    if creds:
+        print('shipping: ' + ', '.join(f'{v} ({os.path.basename(p)})'
+                                       for v, p in creds))
+    else:
+        print('no proxy and no Kerberos ticket found: shipping neither')
+    return sub, len(chunks)
+
+
+def check_batch(batch_dir):
+    """Which jobs have produced a part. Jobs are counted from the file lists
+    written at submit time, so a part that was never produced is reported as
+    missing rather than silently left out of the merge."""
+    batch = os.path.abspath(os.path.expandvars(batch_dir))
+    parts = os.path.join(batch, 'parts')
+    jobs = sorted(os.path.basename(f)[len('filelist_'):-len('.txt')]
+                  for f in glob.glob(os.path.join(batch, 'filelist_*.txt')))
+    done, missing = [], []
+    for job in jobs:
+        path = os.path.join(parts, f'{PART_PREFIX}{job}.pkl')
+        (done if os.path.exists(path) and os.path.getsize(path) else
+         missing).append(job)
+    return done, missing
+
+
+def batch_args(args, cfg):
+    """The options a job needs, rebuilt as a command line.
+
+    Only what changes the histograms is passed on; the plotting and the map
+    writing happen in --merge, on the submit node. The working points come
+    from the resolved cfg and never from args: left to discover them, two jobs
+    reading different files could end up with different WP lists, and their
+    partial accumulators would not line up.
+    """
+    out = []
+    for flag, value, default in (
+            ('--lumi', args.lumi, None),
+            ('--btag-wp', args.btag_wp, None),
+            ('--loose-ele', args.loose_ele, ''),
+            ('--loose-mu', args.loose_mu, ''),
+            ('--top-met-min', args.top_met_min, None),
+            ('--top-mll-min', args.top_mll_min, None),
+            ('--top-min-btags', args.top_min_btags, None),
+            ('--ctrl-bcat', args.ctrl_bcat, None),
+            ('--workers', args.workers, None)):
+        if value != default:
+            out.append(f'{flag}={value}')
+    for flag, values in (('--ele-wp', cfg['ele_wps']),
+                         ('--mu-wp', cfg['mu_wps']),
+                         ('--bcat', cfg['bcats']),
+                         ('--ctrl-wp', cfg['ctrl_wps']),
+                         ('--ctrl-region', cfg['ctrl_regions']),
+                         ('--ctrl-var', cfg['ctrl_vars'])):
+        out.extend(f'{flag}={v}' for v in values)
+    for flag, value in (('--pt-bins', args.pt_bins),
+                        ('--eta-bins-ele', args.eta_bins_ele),
+                        ('--eta-bins-mu', args.eta_bins_mu)):
+        # '=' and not a space: an eta binning starts with '-2.5', which
+        # argparse would otherwise read as an option name
+        out.append(f'{flag}=' + ','.join(repr(float(x)) for x in value))
+    return ' \\\n    '.join(out)
+
+
 def parse_bins(text):
     vals = [float(x) for x in text.split(',')]
     if len(vals) < 2 or not np.all(np.diff(vals) > 0):
@@ -653,7 +850,7 @@ def parse_bins(text):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--snapshot', required=True)
+    ap.add_argument('--snapshot')
     ap.add_argument('--out', default='FakeRateMeasured')
     ap.add_argument('--year', default='2024_v15_pt_measured')
     ap.add_argument('--lumi', type=float, default=110.11)
@@ -703,21 +900,61 @@ def main():
                     help=f'control-plot variables '
                          f'(default: {" ".join(DEFAULT_CTRL_VARS)})')
     ap.add_argument('--no-plots', action='store_true')
+    ap.add_argument('--submitBatch', action='store_true',
+                    help='split the files into HTCondor jobs and submit them')
+    ap.add_argument('--prepareBatch', action='store_true',
+                    help='write the job scripts but do not submit')
+    ap.add_argument('--checkBatch', action='store_true',
+                    help='report which jobs have not produced their part yet')
+    ap.add_argument('--merge', action='store_true',
+                    help='sum the partial accumulators and make the plots and '
+                         'the maps')
+    ap.add_argument('--batch-dir', default='condor',
+                    help='where job scripts, logs and partial results live')
+    ap.add_argument('--files-per-job', type=int, default=20)
+    ap.add_argument('--job-flavour', default='workday',
+                    help='HTCondor +JobFlavour (espresso microcentury longlunch '
+                         'workday tomorrow testmatch nextweek)')
+    ap.add_argument('--lcg-view',
+                    default='/cvmfs/sft.cern.ch/lcg/views/LCG_109a/'
+                            'x86_64-el9-gcc13-opt/setup.sh',
+                    help='setup.sh the job sources before running')
+    ap.add_argument('--file-list',
+                    help='internal: read these files (one path and weight '
+                         'scale per line) instead of listing the snapshot')
+    ap.add_argument('--dump',
+                    help='internal: write the accumulator here and stop')
     ap.add_argument('--plots-only', action='store_true',
                     help='make the control plots and skip the fake/prompt rate '
                          'maps entirely. Does not need ROOT')
     args = ap.parse_args()
+    if args.checkBatch:
+        done, missing = check_batch(args.batch_dir)
+        print(f'{len(done)} of {len(done) + len(missing)} jobs have a part')
+        if missing:
+            print('missing:', ' '.join(missing[:40]),
+                  '...' if len(missing) > 40 else '')
+        return
     for name, value in (('--fraction', args.fraction),
                         ('--data-fraction', args.data_fraction)):
         if not 0. < value <= 1.:
             ap.error(f'{name} must be in (0, 1]')
-    files = list_snapshots(args.snapshot)
+    needs_input = not (args.merge or args.checkBatch)
+    if needs_input and not args.snapshot and not args.file_list:
+        ap.error('--snapshot is required unless --merge or --checkBatch')
+    if args.file_list:
+        files = [line.split('\t')[0] for line in
+                 open(args.file_list).read().splitlines() if line.strip()]
+    elif needs_input:
+        files = list_snapshots(args.snapshot)
+    else:
+        files = []
     if args.max_files:
         files = files[:args.max_files]
-    if not files:
+    if needs_input and not files:
         ap.error('No per-sample snapshots found')
     ele_wps, mu_wps = args.ele_wp[:], args.mu_wp[:]
-    if not ele_wps or not mu_wps:
+    if files and (not ele_wps or not mu_wps):
         import uproot
         keys = None
         for path in files:
@@ -735,7 +972,7 @@ def main():
         if not mu_wps:
             mu_wps = sorted(k.removeprefix('Lepton_isTightMuon_') for k in keys
                             if k.startswith('Lepton_isTightMuon_'))
-    if not ele_wps and not mu_wps:
+    if not args.merge and not ele_wps and not mu_wps:
         ap.error('No tight working points found')
     bcats = args.bcat or ['bveto', 'btag']
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
@@ -764,8 +1001,18 @@ def main():
           f'nbtag>={args.top_min_btags}', flush=True)
     total = {}
     problems = []
-    selected, report = select_files(files, args.fraction, args.data_fraction,
-                                   args.max_files_per_sample, args.workers)
+    if args.file_list:
+        # the scale was decided once, at submit time
+        selected = [(line.split('\t')[0], float(line.split('\t')[1]))
+                    for line in open(args.file_list).read().splitlines()
+                    if line.strip()]
+        report = [f'From {args.file_list}: {len(selected)} files']
+    elif needs_input:
+        selected, report = select_files(files, args.fraction,
+                                        args.data_fraction,
+                                        args.max_files_per_sample, args.workers)
+    else:
+        selected, report = [], []
     for line in report:
         print(line, flush=True)
     if len(selected) < len(files):
@@ -775,6 +1022,22 @@ def main():
               'statistical error and the uncertainties written out are '
               'correspondingly larger. Not a result to publish.', flush=True)
     files = [p for p, _ in selected]
+    if args.submitBatch or args.prepareBatch:
+        sub, njobs = write_batch(args, selected, batch_args(args, cfg))
+        if args.prepareBatch:
+            print(f'Written {sub}. Submit with: condor_submit {sub}')
+            return
+        proc = subprocess.run(['condor_submit', os.path.basename(sub)],
+                              cwd=os.path.dirname(sub), text=True,
+                              capture_output=True)
+        print(proc.stdout or '', proc.stderr or '')
+        if proc.returncode:
+            raise SystemExit(f'condor_submit failed ({proc.returncode})')
+        print(f'Submitted {njobs} jobs. When they are done:\n'
+              f'  {os.path.basename(__file__)} --merge '
+              f'--batch-dir {args.batch_dir} --out {args.out} '
+              f'--year {args.year}')
+        return
     payloads = [(p, cfg, scale) for p, scale in selected]
     def merge(acc, msgs):
         problems.extend(msgs)
@@ -783,7 +1046,25 @@ def main():
                 total[key] += value
             else:
                 total[key] = value.copy()
-    if args.workers > 1:
+    if args.merge:
+        parts_dir = os.path.join(os.path.abspath(
+            os.path.expandvars(args.batch_dir)), 'parts')
+        total, part_problems, nparts, job_cfg = load_partials(parts_dir)
+        problems.extend(part_problems)
+        if not nparts:
+            raise SystemExit(f'No {PART_PREFIX}*.pkl in {parts_dir}')
+        # The jobs' configuration wins: the histograms were filled with it, and
+        # re-deriving it here would mean repeating every option on the merge.
+        cfg.update(job_cfg)
+        ele_wps, mu_wps = cfg['ele_wps'], cfg['mu_wps']
+        bcats, bins, maps = cfg['bcats'], cfg['bins'], cfg['maps']
+        done, missing = check_batch(args.batch_dir)
+        print(f'Merged {nparts} partial results from {parts_dir}')
+        if missing:
+            print(f'WARNING: {len(missing)} jobs have no part and are NOT in '
+                  f'this merge: {" ".join(missing[:20])}'
+                  f'{" ..." if len(missing) > 20 else ""}')
+    elif args.workers > 1:
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
             futures = {pool.submit(process_file, payload): payload[0]
                        for payload in payloads}
@@ -802,6 +1083,11 @@ def main():
                 problems.append(f'{payload[0]}: {traceback.format_exc(limit=2)}')
             if i % 50 == 0:
                 print(f'Processed {i}/{len(files)}', flush=True)
+    if args.dump:
+        dump_partial(args.dump, total, problems, cfg)
+        print(f'Wrote {args.dump}: {len(total)} histograms, '
+              f'{len(problems)} warnings')
+        return
     for msg in problems[:30]:
         print('WARNING:', msg)
     if len(problems) > 30:
