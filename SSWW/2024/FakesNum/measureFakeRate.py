@@ -11,6 +11,12 @@ All histograms use sample weights: DATA METFilter_DATA; MC XSWeight * lumi *
 METFilter_Common. If XSWeight does not include sample normalization, provide
 proper normalization upstream before using this script.
 
+Triggers: the 1-lepton region requires a single-lepton path alone
+(IsoMu24, Ele30_WPTight_Gsf), the 2-lepton regions the full analysis OR. So
+the 1-lepton probe is itself the triggering object and its rate is biased high
+by the HLT isolation -- it is a cross-check, not the rate to apply. See the
+SINGLE_TRIGGERS comment.
+
 The top CR is defined here (not inferred from cuts.py): OS e-mu, nLepSel==2,
 mll>12, MET>30 and >=1 central loose-btag jet with pT>30. Adjust the
 --top-* parameters to match your actual cuts.py. Top is plotted as a control
@@ -37,15 +43,46 @@ MC_SAMPLES = ('DY', 'Wjets', 'top', 'WZ', 'ZZ', 'WW')
 DATA_SAMPLES = ('DATA',)
 BTAG_WPS = {'loose': 0.0246, 'medium': 0.1272, 'tight': 0.4648}
 BTAG_BRANCH = 'Jet_btagUParTAK4B'
-TRIGGERS = (
+# The analysis trigger set, split by lepton multiplicity.  The split is not
+# cosmetic -- it is what each region can coherently ask for.
+#
+# The 1-lepton region holds exactly one selected lepton, so a *dilepton* path
+# there can only have fired on something that is not it: most often a jet
+# faking the loose Ele23/Ele12 leg, sometimes a muon in a jet on the TrkIsoVVL
+# leg.  That lets probes below the single-lepton threshold into the region and
+# selects them by implicitly demanding a second hard unselected object, which
+# is a different event sample with no reason to carry the right tight/loose
+# composition.  Hence SINGLE_TRIGGERS alone, which also bounds the probe pT at
+# the real thresholds (~26 GeV for muons, ~32 for electrons) instead of at the
+# 10 GeV lepSel floor.
+#
+# The price is intrinsic: with one selected lepton the probe *is* the object
+# that fired, so it is forced through the HLT isolation, which removes
+# loose-not-tight leptons from the denominator and pulls the measured rate up.
+# Ele30_WPTight_Gsf asks for the full tight HLT ID, so the electron rate here
+# should come out close to 1.  That is not a bug, and it is not the bias the
+# application region has -- the 1-lepton rate is a cross-check, not the number
+# to apply.
+#
+# The 2-lepton regions keep the full OR, which *is* the analysis OR
+# (SSWW/2024/samples.py:77-81, partitioned there by primary dataset).  The
+# supercut puts the leading lepton above 25 GeV, so in the signal region the
+# trigger is satisfied by that lepton while the probe -- the subleading one,
+# down to 10 GeV -- is unconstrained.  The SS region reproduces exactly that
+# structure, so whatever bias the probe carries is the bias it also carries
+# where the rate is applied, and it cancels in the ratio.
+SINGLE_TRIGGERS = (
+    'HLT_IsoMu24',
+    'HLT_Ele30_WPTight_Gsf',
+)
+DOUBLE_TRIGGERS = (
     'HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL',
     'HLT_Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ',
     'HLT_Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ',
     'HLT_Mu17_TrkIsoVVL_Mu8_TrkIsoVVL_DZ_Mass3p8',
-    'HLT_IsoMu24',
     'HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL',
-    'HLT_Ele30_WPTight_Gsf',
 )
+TRIGGERS = SINGLE_TRIGGERS + DOUBLE_TRIGGERS
 BCATS = {'incl': None, 'bveto': ('zero', 20.), 'btag': ('one', 30.)}
 DEFAULT_PT = '10,15,20,25,30,35,45,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
@@ -321,6 +358,9 @@ def process_file(payload):
         return {}, [f'{UNREADABLE} {path}: {error}']
     messages = ([f'{os.path.basename(path)}: absent trigger paths {tmissing}']
                 if tmissing else [])
+    if not any(t in thave for t in SINGLE_TRIGGERS):
+        messages.append(f'{os.path.basename(path)}: no single-lepton path; '
+                        'the 1-lepton region is empty for this file')
     n = len(a['nLepSel'])
     if not n:
         return {}, messages
@@ -336,9 +376,15 @@ def process_file(payload):
         ak.to_numpy(a['METFilter_DATA']).astype(float) if is_data else
         ak.to_numpy(a['XSWeight']).astype(float) *
         ak.to_numpy(a['METFilter_Common']).astype(float) * cfg['lumi'])
-    fired = np.zeros(n, dtype=bool)
-    for trigger in thave:
-        fired |= ak.to_numpy(a[trigger]).astype(bool)
+    # Two masks, not one: see the SINGLE_TRIGGERS note.  '1l' takes the
+    # single-lepton paths alone; every 2-lepton region takes the analysis OR.
+    fired = {}
+    for key, paths in (('single', SINGLE_TRIGGERS), ('any', TRIGGERS)):
+        mask = np.zeros(n, dtype=bool)
+        for trigger in paths:
+            if trigger in thave:
+                mask |= ak.to_numpy(a[trigger]).astype(bool)
+        fired[key] = mask
     # Safe take for CleanJet_jetIdx == -1: such jets must not be b-tagged.
     # int64 is not optional: CleanJet_jetIdx is ULong64_t, and uint64 against
     # the int64 literal of ak.where promotes to float64 -- which awkward then
@@ -371,7 +417,8 @@ def process_file(payload):
         'top': (nlep == 2) & isos & ~issf & (mll > cfg['top_mll_min']) &
                (met > cfg['top_met_min']) & (nbtags[30.] >= cfg['top_min_btags']),
     }
-    region = {r: mask & fired for r, mask in region.items()}
+    region = {r: mask & fired['single' if r == '1l' else 'any']
+              for r, mask in region.items()}
     prompt = (pad2(a['SelLep_promptgenmatched']).astype(bool)
               if not is_data else None)
     loose = {}
@@ -1311,6 +1358,9 @@ def main():
     print(f'Control plots: regions {args.ctrl_region or list(CTRL_REGIONS)}, '
           f'variables {args.ctrl_var or list(DEFAULT_CTRL_VARS)}, '
           f'b-category {args.ctrl_bcat}, WPs {ctrl_wps}', flush=True)
+    print(f'Triggers: 1l requires {list(SINGLE_TRIGGERS)}; '
+          f'2l regions require the full analysis OR of {len(TRIGGERS)} paths',
+          flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
           f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
           f'MET>{args.top_met_min}, mll>{args.top_mll_min}, '
