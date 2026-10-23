@@ -11,8 +11,9 @@ All histograms use sample weights: DATA METFilter_DATA; MC XSWeight * lumi *
 METFilter_Common. If XSWeight does not include sample normalization, provide
 proper normalization upstream before using this script.
 
-Triggers: the 1-lepton region requires a single-lepton path alone
-(IsoMu24, Ele30_WPTight_Gsf), the 2-lepton regions the full analysis OR. So
+Triggers: the 1-lepton region requires the single-lepton path of the probe's
+own flavour (Ele30_WPTight_Gsf for electrons, IsoMu24 for muons), the
+2-lepton regions the full analysis OR. So
 the 1-lepton probe is itself the triggering object and its rate is biased high
 by the HLT isolation -- it is a cross-check, not the rate to apply. See the
 SINGLE_TRIGGERS comment.
@@ -52,9 +53,13 @@ BTAG_BRANCH = 'Jet_btagUParTAK4B'
 # leg.  That lets probes below the single-lepton threshold into the region and
 # selects them by implicitly demanding a second hard unselected object, which
 # is a different event sample with no reason to carry the right tight/loose
-# composition.  Hence SINGLE_TRIGGERS alone, which also bounds the probe pT at
-# the real thresholds (~26 GeV for muons, ~32 for electrons) instead of at the
-# 10 GeV lepSel floor.
+# composition.  Hence the single-lepton path alone -- and the one matching the
+# probe's own flavour, because the OR of both reopens the same hole: a 12 GeV
+# electron probe passes an IsoMu24 that fired on a muon failing lepSel.  Asked
+# for per flavour, the requirement bounds the probe pT at the real thresholds
+# (~26 GeV for muons, ~32 for electrons) rather than at the 10 GeV lepSel
+# floor.  Only the turn-on leaks below: offline pT and HLT pT are different
+# measurements, so a muon of 24-26 GeV can fire IsoMu24 and is physical.
 #
 # The price is intrinsic: with one selected lepton the probe *is* the object
 # that fired, so it is forced through the HLT isolation, which removes
@@ -71,10 +76,15 @@ BTAG_BRANCH = 'Jet_btagUParTAK4B'
 # down to 10 GeV -- is unconstrained.  The SS region reproduces exactly that
 # structure, so whatever bias the probe carries is the bias it also carries
 # where the rate is applied, and it cancels in the ratio.
-SINGLE_TRIGGERS = (
-    'HLT_IsoMu24',
-    'HLT_Ele30_WPTight_Gsf',
-)
+# Keyed by the probe's flavour, and asked for per probe rather than as one OR:
+# the OR of both would let a 12 GeV electron into the region on an IsoMu24 that
+# fired on a muon failing lepSel, which is the same loophole the dilepton paths
+# opened, only narrower.
+SINGLE_TRIGGERS = {
+    'ele': ('HLT_Ele30_WPTight_Gsf',),
+    'mu': ('HLT_IsoMu24',),
+}
+ALL_SINGLE = tuple(t for paths in SINGLE_TRIGGERS.values() for t in paths)
 DOUBLE_TRIGGERS = (
     'HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL',
     'HLT_Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ',
@@ -82,7 +92,7 @@ DOUBLE_TRIGGERS = (
     'HLT_Mu17_TrkIsoVVL_Mu8_TrkIsoVVL_DZ_Mass3p8',
     'HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL',
 )
-TRIGGERS = SINGLE_TRIGGERS + DOUBLE_TRIGGERS
+TRIGGERS = ALL_SINGLE + DOUBLE_TRIGGERS
 BCATS = {'incl': None, 'bveto': ('zero', 20.), 'btag': ('one', 30.)}
 DEFAULT_PT = '10,15,20,25,30,35,45,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
@@ -358,7 +368,7 @@ def process_file(payload):
         return {}, [f'{UNREADABLE} {path}: {error}']
     messages = ([f'{os.path.basename(path)}: absent trigger paths {tmissing}']
                 if tmissing else [])
-    if not any(t in thave for t in SINGLE_TRIGGERS):
+    if not any(t in thave for t in ALL_SINGLE):
         messages.append(f'{os.path.basename(path)}: no single-lepton path; '
                         'the 1-lepton region is empty for this file')
     n = len(a['nLepSel'])
@@ -376,10 +386,13 @@ def process_file(payload):
         ak.to_numpy(a['METFilter_DATA']).astype(float) if is_data else
         ak.to_numpy(a['XSWeight']).astype(float) *
         ak.to_numpy(a['METFilter_Common']).astype(float) * cfg['lumi'])
-    # Two masks, not one: see the SINGLE_TRIGGERS note.  '1l' takes the
-    # single-lepton paths alone; every 2-lepton region takes the analysis OR.
+    # One mask per single-lepton flavour, plus the analysis OR.  See the
+    # SINGLE_TRIGGERS note for why the flavours are kept apart.
+    groups = {'any': TRIGGERS}
+    groups.update((f'single_{flav}', paths)
+                  for flav, paths in SINGLE_TRIGGERS.items())
     fired = {}
-    for key, paths in (('single', SINGLE_TRIGGERS), ('any', TRIGGERS)):
+    for key, paths in groups.items():
         mask = np.zeros(n, dtype=bool)
         for trigger in paths:
             if trigger in thave:
@@ -417,8 +430,11 @@ def process_file(payload):
         'top': (nlep == 2) & isos & ~issf & (mll > cfg['top_mll_min']) &
                (met > cfg['top_met_min']) & (nbtags[30.] >= cfg['top_min_btags']),
     }
-    region = {r: mask & fired['single' if r == '1l' else 'any']
-              for r, mask in region.items()}
+    # `region` is the kinematic selection alone; the trigger is asked for
+    # separately because in '1l' it depends on the probe's flavour, and every
+    # use of a region therefore goes through trig[chan][flav].
+    trig = {r: {'ele': fired['any'], 'mu': fired['any']} for r in region}
+    trig['1l'] = {flav: fired[f'single_{flav}'] for flav in ('ele', 'mu')}
     prompt = (pad2(a['SelLep_promptgenmatched']).astype(bool)
               if not is_data else None)
     loose = {}
@@ -435,7 +451,7 @@ def process_file(payload):
     acc = {}
     # Histograms for maps: (mapname, tight/rest, data/mc, sumw/sumw2)
     for name, flav, i, kind, chan, wp, bcat in cfg['maps']:
-        sel = (region[chan] & bmask[bcat] & (nlep > i) &
+        sel = (region[chan] & trig[chan][flav] & bmask[bcat] & (nlep > i) &
                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                loose[flav][:, i] & np.isfinite(pt[:, i]) &
                np.isfinite(eta[:, i]) & np.isfinite(weight) & (weight != 0))
@@ -474,7 +490,8 @@ def process_file(payload):
                     for i in (0, 1):
                         if chan == '1l' and i == 1:
                             continue
-                        sel = (region[chan] & bmask[bcat] & (nlep > i) &
+                        sel = (region[chan] & trig[chan][flav] &
+                               bmask[bcat] & (nlep > i) &
                                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                                loose[flav][:, i] & np.isfinite(pt[:, i]) &
                                np.isfinite(eta[:, i]) & np.isfinite(weight) &
@@ -548,7 +565,8 @@ def process_file(payload):
             if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                 continue
             for i in (0, 1):
-                sel = (region['dy'] & bmask[cfg['sf_bcat']] & (nlep > i) &
+                sel = (region['dy'] & trig['dy'][flav] &
+                       bmask[cfg['sf_bcat']] & (nlep > i) &
                        (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                        loose[flav][:, i] & np.isfinite(pt[:, i]) &
                        np.isfinite(eta[:, i]) & np.isfinite(weight) &
@@ -1358,8 +1376,9 @@ def main():
     print(f'Control plots: regions {args.ctrl_region or list(CTRL_REGIONS)}, '
           f'variables {args.ctrl_var or list(DEFAULT_CTRL_VARS)}, '
           f'b-category {args.ctrl_bcat}, WPs {ctrl_wps}', flush=True)
-    print(f'Triggers: 1l requires {list(SINGLE_TRIGGERS)}; '
-          f'2l regions require the full analysis OR of {len(TRIGGERS)} paths',
+    print('Triggers: 1l requires the single-lepton path of the probe flavour '
+          f'({", ".join(f"{k}: {v[0]}" for k, v in SINGLE_TRIGGERS.items())}); '
+          f'2l regions the full analysis OR of {len(TRIGGERS)} paths',
           flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
           f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
