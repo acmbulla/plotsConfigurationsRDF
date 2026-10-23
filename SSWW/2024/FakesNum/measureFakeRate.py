@@ -378,8 +378,6 @@ def process_file(payload):
                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                loose[flav][:, i] & np.isfinite(pt[:, i]) &
                np.isfinite(eta[:, i]) & np.isfinite(weight) & (weight != 0))
-        if not is_data:
-            sel &= prompt[:, i]
         xb, yb = cfg['bins'][flav]
         sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
         if not np.any(sel):
@@ -387,12 +385,22 @@ def process_file(payload):
         x = np.clip(pt[sel, i], xb[0], np.nextafter(xb[-1], -np.inf))
         y, w = eta[sel, i], weight[sel]
         t = tight[flav, wp][sel, i]
-        for part, mask in (('tight', t), ('rest', ~t)):
-            if not mask.any():
-                continue
-            for moment, ww in (('sumw', w[mask]), ('sumw2', w[mask]**2)):
-                acc[('map', name, part, 'data' if is_data else 'mc', moment)] = hist2(
-                    x[mask], y[mask], ww, xb, yb)
+        # Two MC series, not one. 'mc' is the prompt component, which is what
+        # the fake rate subtracts; 'mcnp' is the nonprompt one, which is the
+        # contamination the prompt rate has to subtract instead. Keeping both
+        # means neither measurement needs its own pass.
+        if is_data:
+            series = [('data', np.ones(len(w), dtype=bool))]
+        else:
+            series = [('mc', prompt[sel, i]), ('mcnp', ~prompt[sel, i])]
+        for part, partmask in (('tight', t), ('rest', ~t)):
+            for source, srcmask in series:
+                mask = partmask & srcmask
+                if not mask.any():
+                    continue
+                for moment, ww in (('sumw', w[mask]), ('sumw2', w[mask]**2)):
+                    acc[('map', name, part, source, moment)] = hist2(
+                        x[mask], y[mask], ww, xb, yb)
     # Control plots: all MC components (prompt AND nonprompt), and data.
     # Loose = tight + rest, both plotted independently; inclusive in signed eta.
     # For ss/dy/top, select each lepton by its actual flavour and position.
@@ -590,6 +598,61 @@ def compute_sf(total, cfg):
     return out, empty
 
 
+def plot_rate_map(values, xb, yb, title, path, vmax=None):
+    """2D colz view of one rate map. Scale fixed from 0 to vmax so the three
+    variants of the same map can be compared by eye."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(7.4, 5.4))
+    top = vmax if vmax else max(float(np.max(values)), 1e-6)
+    mesh = ax.pcolormesh(np.asarray(xb), np.asarray(yb), values.T,
+                         cmap='viridis', vmin=0., vmax=top)
+    bar = fig.colorbar(mesh, ax=ax)
+    bar.set_label('rate')
+    for ix in range(values.shape[0]):
+        for iy in range(values.shape[1]):
+            ax.text((xb[ix] + xb[ix + 1]) / 2, (yb[iy] + yb[iy + 1]) / 2,
+                    f'{values[ix, iy]:.3f}', ha='center', va='center',
+                    fontsize=5.5, color='white')
+    ax.set_xlabel(r'lepton $p_{T}$ [GeV]')
+    ax.set_ylabel(r'lepton $\eta$')
+    ax.set_title(title, fontsize=9)
+    fig.subplots_adjust(left=.10, right=1.0, top=.92, bottom=.11)
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+
+
+def compare_variants(comparisons):
+    """How far apart the three versions of each map are.
+
+    The question this answers is whether the EWK subtraction, and then the DY
+    reweighting of that subtraction, move the rate by an amount worth caring
+    about. Quoted as an absolute difference in the rate, because the rate is
+    itself a fraction: a 0.01 shift on f = 0.15 is what matters, not a
+    percentage of a percentage.
+    """
+    if not comparisons:
+        return []
+    lines = ['',
+             'Effect of the subtraction and of the DY reweighting, as the '
+             'largest and median |delta f| over the measured bins:',
+             f'  {"map":34s} {"raw->EWK":>18s} {"EWK->EWKcorr":>18s}']
+    worst = 0.
+    for name, wp, ok, raw, ewk, corr in comparisons:
+        if not ok.any():
+            continue
+        d1 = np.abs(ewk[ok] - raw[ok])
+        d2 = np.abs(corr[ok] - ewk[ok])
+        worst = max(worst, float(d2.max()))
+        lines.append(f'  {name:34s} '
+                     f'{d1.max():7.4f} ({np.median(d1):6.4f}) '
+                     f'{d2.max():7.4f} ({np.median(d2):6.4f})')
+    lines.append(f'  largest effect of the reweighting on any bin of any map: '
+                 f'{worst:.4f} in absolute rate')
+    return lines
+
+
 def report_sf(scale_factors, empty, wps):
     """One line per map: how large the correction actually is."""
     lines = ['DY scale factors (data/MC), applied to every MC process:']
@@ -638,7 +701,7 @@ def plot_sf_map(plt, sf, err, xb, yb, title, path, empty):
     plt.close(fig)
 
 
-def make_plots(total, cfg, base):
+def make_plots(total, cfg, base, scale_factors, empty_bins):
     """One PNG per region, lepton slot, variable and loose/tight.
 
     Deliberately one file per plot rather than a multi-page PDF: these are
@@ -650,9 +713,6 @@ def make_plots(total, cfg, base):
     import matplotlib.pyplot as plt
     os.makedirs(base, exist_ok=True)
     written = []
-    scale_factors, empty_bins = compute_sf(total, cfg)
-    for line in report_sf(scale_factors, empty_bins, cfg['ctrl_wps']):
-        print(line, flush=True)
     for (wp, flav, i, part), (sf, err) in sorted(scale_factors.items()):
         if wp not in cfg['ctrl_wps'] or part == 'rest':
             continue
@@ -1338,35 +1398,65 @@ def main():
     if len(problems) > 30:
         print(f'... {len(problems)-30} more messages')
     base = os.path.join(os.path.expandvars(args.out), args.year)
+    scale_factors, empty_bins = compute_sf(total, cfg)
+    for line in report_sf(scale_factors, empty_bins, cfg['ctrl_wps']):
+        print(line, flush=True)
     def grab(name, part, source, moment, flav):
         shape = (len(bins[flav][0])-1, len(bins[flav][1])-1)
         return total.get(('map', name, part, source, moment), np.zeros(shape))
     written = 0
-    for name, flav, _, kind, _, wp, _ in maps:
+    comparisons = []
+    for name, flav, i, kind, _, wp, _ in maps:
         if args.plots_only:
             break
         xb, yb = bins[flav]
         Td, Td2 = grab(name, 'tight', 'data', 'sumw', flav), grab(name, 'tight', 'data', 'sumw2', flav)
         Rd, Rd2 = grab(name, 'rest', 'data', 'sumw', flav), grab(name, 'rest', 'data', 'sumw2', flav)
-        Tm, Tm2 = grab(name, 'tight', 'mc', 'sumw', flav), grab(name, 'tight', 'mc', 'sumw2', flav)
-        Rm, Rm2 = grab(name, 'rest', 'mc', 'sumw', flav), grab(name, 'rest', 'mc', 'sumw2', flav)
+        # The fake rate subtracts the prompt MC; the prompt rate subtracts the
+        # nonprompt contamination of the DY CR. Same arithmetic, other series.
+        source = 'mc' if kind == 'FR' else 'mcnp'
+        Tm, Tm2 = grab(name, 'tight', source, 'sumw', flav), grab(name, 'tight', source, 'sumw2', flav)
+        Rm, Rm2 = grab(name, 'rest', source, 'sumw', flav), grab(name, 'rest', source, 'sumw2', flav)
         if not np.any(Td + Rd):
             continue
-        f, e, ok = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, kind == 'FR')
+        # The DY factors reweight the subtracted MC, each level by its own map.
+        sf_t = scale_factors.get((wp, flav, i, 'tight'), (np.ones_like(Tm),))[0]
+        sf_r = scale_factors.get((wp, flav, i, 'rest'), (np.ones_like(Rm),))[0]
+        raw, raw_e, ok = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, False)
+        ewk, ewk_e, _ = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, True)
+        corr, corr_e, _ = ratio(Td, Td2, Rd, Rd2,
+                                Tm * sf_t, Tm2 * sf_t ** 2,
+                                Rm * sf_r, Rm2 * sf_r ** 2, True)
+        f, e = corr, corr_e
+        tag = 'FR' if kind == 'FR' else 'PR'
+        ingredients = {f'{tag}_pT_eta': (raw, raw_e),
+                       f'{tag}_pT_eta_EWK': (ewk, ewk_e),
+                       'h_tight_data': (Td, np.sqrt(Td2)),
+                       'h_rest_data': (Rd, np.sqrt(Rd2)),
+                       'h_tight_mc': (Tm, np.sqrt(Tm2)),
+                       'h_rest_mc': (Rm, np.sqrt(Rm2)),
+                       'h_tight_mc_SF': (Tm * sf_t, np.sqrt(Tm2) * sf_t),
+                       'h_rest_mc_SF': (Rm * sf_r, np.sqrt(Rm2) * sf_r)}
         if kind == 'FR':
-            raw, raw_e, _ = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, False)
-            ingredients = {'FR_pT_eta': (raw, raw_e),
-                           'h_tight_data': (Td, np.sqrt(Td2)),
-                           'h_rest_data': (Rd, np.sqrt(Rd2)),
-                           'h_tight_mc': (Tm, np.sqrt(Tm2)),
-                           'h_rest_mc': (Rm, np.sqrt(Rm2))}
             hist_name = 'FR_pT_eta_EWKcorr'
         else:
-            ingredients = {'PR_pT_eta': (f, e),
-                           'h_tight_data': (Td, np.sqrt(Td2)),
-                           'h_rest_data': (Rd, np.sqrt(Rd2))}
             hist_name = ('h_Ele_signal_pt_eta_bin' if flav == 'ele'
                          else 'h_Muon_signal_pt_eta_bin')
+        comparisons.append((name, wp, ok, raw, ewk, corr))
+        if wp in cfg['ctrl_wps'] and not args.no_plots:
+            # one scale for the three, so the comparison is the picture and
+            # not an exercise in reading two colour bars
+            top = max(float(np.max(v[ok])) if ok.any() else 0.
+                      for v in (raw, ewk, corr))
+            top = min(max(top, 1e-3), 1.)
+            for suffix, values in (('', raw), ('_EWK', ewk),
+                                   ('_EWKcorr', corr)):
+                out = os.path.join(base, wp, 'maps',
+                                   f'{name}{suffix}.png')
+                os.makedirs(os.path.dirname(out), exist_ok=True)
+                plot_rate_map(values, xb, yb,
+                              f'{name}{suffix or "  (no subtraction)"}\n{wp}',
+                              out, vmax=top)
         invalid = ok & ((f < 0) | (f >= 1))
         if np.any(invalid):
             print(f'WARNING: {name} has {invalid.sum()} nonphysical bins')
@@ -1374,8 +1464,11 @@ def main():
                    f, e, ingredients, xb, yb)
         written += 1
     print(f'Wrote {written} ROOT maps in {base}')
+    for line in compare_variants(comparisons):
+        print(line)
     if not args.no_plots:
-        nplots = make_plots(total, cfg, os.path.join(base, 'plots'))
+        nplots = make_plots(total, cfg, os.path.join(base, 'plots'),
+                            scale_factors, empty_bins)
         print(f'Wrote {nplots} control PNGs in {base}/plots')
     print(f'Read warnings/errors: {len(problems)}')
 
