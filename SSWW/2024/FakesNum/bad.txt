@@ -1,0 +1,8 @@
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____DY_DYto2Mu-2Jets_MLL-50_103.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____DY_DYto2Mu-2Jets_MLL-50_124.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____DY_DYto2Tau-2Jets_MLL-50_11.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____top_TTTo2L2Nu_117.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____top_TTTo2L2Nu_128.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____top_TTTo2L2Nu_67.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____top_TTTo2L2Nu_78.root
+/eos/cms/store/group/phys_smp/ec/Latinos/HWWNano/Summer24_150x_nAODv15_Full2024v15/snapshot/Fakes/nanoLatino_snapshot____top_TTTo2L2Nu_87.root
