@@ -37,6 +37,18 @@ in più: la sua curva inclusiva nei jet contro i suoi bin di jet, cioè
 `<caso>_<bcat>_jetbins_<variante>.png/.pdf`. Con le tre categorie b e i tre
 casi sono nove grafici per variante, in aggiunta ai quattro di sopra.
 
+Oltre a questo, i tre casi di leptone vengono confrontati **dentro ogni bin di
+jet**: `inclusive_1lep_vs_2lep_<jcat>`, cioè lo stesso confronto del punto 1
+ma a molteplicità di jet fissata, sempre b-inclusivo.
+
+`--bcat` limita le categorie b da elaborare. Per una misura fatta con
+`measureFakeRate.py --bcat incl` si passa `--bcat incl`, così le mappe bveto e
+btag assenti non vengono riportate come buchi e il confronto
+inclusive/bjet/bveto, che avrebbe una sola curva, non viene disegnato.
+
+Un confronto in cui non esiste **nessuna** delle curve richieste non viene
+prodotto affatto: una figura di soli `[mancante]` dice meno della sua assenza.
+
 Quelle mappe sono facoltative. Se non ci sono, non viene segnalato nulla,
 perché lo split è opzionale al momento della misura; se però ne esiste solo
 una parte -- per esempio `ee_lep1_incl_j1` senza `emu_lep1_incl_j1`, che

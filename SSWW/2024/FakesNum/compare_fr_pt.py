@@ -307,6 +307,11 @@ def main():
     ap.add_argument('--variant', choices=['both','corrected','ewk','raw'], default='both',
                     help='both (default): separate EWK and EWKcorr outputs; corrected selects EWKcorr only')
     ap.add_argument('--two-lepton-channels', nargs='+', choices=['sf','df'], default=['sf','df'])
+    ap.add_argument('--bcat', nargs='+', choices=list(BCATS), default=list(BCATS),
+                    help='b categories to process (default: all three). Use '
+                         '"--bcat incl" for a measurement made with '
+                         'measureFakeRate.py --bcat incl, so the absent '
+                         'bveto/btag maps are not reported as gaps')
     ap.add_argument('--jet-cat', nargs='+', choices=list(JETCATS), default=list(JETCATS),
                     help='jet-multiplicity categories to pick up when the input has them (default: all)')
     ap.add_argument('--allow-missing', action='store_true', help='mark incomplete curves missing; never merge only part of the requested channels')
@@ -319,6 +324,7 @@ def main():
     variants = ['ewk','corrected'] if args.variant == 'both' else [args.variant]
     channels = list(dict.fromkeys(args.two_lepton_channels))
     jetcats = [jcat for jcat in JETCATS if jcat in args.jet_cat]
+    bcats = {b: label for b, label in BCATS.items() if b in args.bcat}
     args.out.mkdir(parents=True,exist_ok=True)
     os.environ.setdefault('MPLCONFIGDIR',str((args.out/'.matplotlib').resolve()))
     import matplotlib
@@ -350,7 +356,7 @@ def main():
                 # was not measured and nothing is said -- but a *partly*
                 # present one is still a gap, by the same rule the channels
                 # follow: never merge only some of the requested maps.
-                for bcat in BCATS:
+                for bcat in bcats:
                     for cat, required in ([(bcat, True)] +
                                           [(f'{bcat}_{jcat}', False) for jcat in jetcats]):
                         names = needed_names(flavor,case,cat,channels)
@@ -419,13 +425,23 @@ def main():
         context = wp if relative=='.' else relative
         plots = [('inclusive_1lep_vs_2lep',[(f'{case}/incl',label) for case,label in CASES.items()],
                   f'{flavor} · {context} · inclusive')]
-        plots += [(f'{case}_inclusive_bjet_bveto',[(f'{case}/{bcat}',label) for bcat,label in BCATS.items()],
-                   f'{flavor} · {context} · {CASES[case]}') for case in CASES]
+        # Only worth drawing when there is more than one b category to compare.
+        plots += [(f'{case}_inclusive_bjet_bveto',[(f'{case}/{bcat}',label) for bcat,label in bcats.items()],
+                   f'{flavor} · {context} · {CASES[case]}')
+                  for case in CASES if len(bcats) > 1]
         # One per case and b category, only where jet-binned maps were found.
         # The jet-inclusive curve of the same b category leads, so the plot
         # shows what the split does to the number the analysis uses today.
+        # The three lepton cases against each other inside one jet bin: the
+        # same comparison as inclusive_1lep_vs_2lep, one panel per jet bin.
+        for jcat in jetcats:
+            entries = [(f'{case}/incl_{jcat}', label) for case, label in CASES.items()
+                       if f'{case}/incl_{jcat}' in curves]
+            if entries and 'incl' in bcats:
+                plots.append((f'inclusive_1lep_vs_2lep_{jcat}', entries,
+                              f'{flavor} · {context} · inclusive · {JETCATS[jcat]}'))
         for case in CASES:
-            for bcat, blabel in BCATS.items():
+            for bcat, blabel in bcats.items():
                 entries = [(f'{case}/{bcat}_{jcat}', JETCATS[jcat]) for jcat in jetcats
                            if f'{case}/{bcat}_{jcat}' in curves]
                 if not entries:
@@ -470,6 +486,10 @@ def main():
                               f'{flavor} · {context} · mappe vecchie vs nuove · '
                               f'{JETCATS[jcat]}'))
         for name,entries,title in plots:
+            # Nothing measured at all: an overlay of only [mancante] entries is
+            # a blank figure that says less than its absence does.
+            if not any(key in curves for key,_ in entries):
+                continue
             name = f'{name}_{variant_tag}'
             title = f'{title} · {variant_tag}'
             overlay(curves,entries,title,f'{SUBTRACTION[variant]} · integrazione su η',folder/name)
