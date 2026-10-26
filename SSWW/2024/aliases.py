@@ -355,7 +355,10 @@ for kind, label in [
 # or another and rerunning. Only the b-veto maps are read, because the
 # analysis vetoes b jets; 'bveto' is the one string to change the day it does
 # not.
-fakerates_regions = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/FakeRateMeasured'
+# Same tree as the jet20/30/40 maps above, so the same base: these live in
+# this repo, under utils/data/FakeRate/<year>/<WP>/, and the jobs read them
+# over xrootd from the clone on EOS.
+fakerates_regions = fakerates
 fakerates_regions_year = '2024_v15_pt_measured'
 fakerates_bcat = 'bveto'
 
