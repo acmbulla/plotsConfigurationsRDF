@@ -338,6 +338,68 @@ for kind, label in [
         'samples': ['Fake'],
     }
 
+
+# -------- fake rate from the region-split maps
+#
+# measureFakeRate.py (FakesNum) measures the rate separately in each region it
+# can be applied in: one lepton, and two leptons split by flavour pair and by
+# which of the two the probe is. The maps live under
+# <fakerates_regions>/<year>/<WP>/ as
+#   {Ele,Muon}FR_{1l,ee,mumu,emu}[_lep0,_lep1]_<bcat>.root
+#   ElePR_ee_lep{0,1}.root / MuonPR_mumu_lep{0,1}.root
+# The prompt rate has no 1l and no emu map -- it is measured on the Z peak, so
+# it only exists same-flavour -- and no b category, so it carries no <bcat>.
+#
+# These are defined ALONGSIDE fakeW above, not in place of it: the point of
+# this branch is to compare them, which means pointing samples.py at one name
+# or another and rerunning. Only the b-veto maps are read, because the
+# analysis vetoes b jets; 'bveto' is the one string to change the day it does
+# not.
+fakerates_regions = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/FakeRateMeasured'
+fakerates_regions_year = '2024_v15_pt_measured'
+fakerates_bcat = 'bveto'
+
+# Three readers, one class: they differ only in which map a lepton is sent to.
+#   auto -- the region the event is actually in
+#   lep1 -- always the subleading-probe maps, for the alternative sample
+#   1l   -- always the single-lepton maps
+# The 1l rate is measured with the probe itself firing the single-lepton
+# trigger, so it is pulled up by the HLT isolation (measureFakeRate.py:55-70):
+# it is a cross-check, not the number to apply.
+for _name, _mode, _inst_tag in [
+    ('fakeW_regions', 'auto', 'auto'),
+    ('fakeW_lep1',    'lep1', 'lep1'),
+    ('fakeW_1l',      '1l',   'onel'),
+]:
+    # Only the statistical variations: these maps are split by b category, not
+    # by jet pT, so the EleUp/MuUp pair of the jet20/30/40 files has no
+    # counterpart here.
+    for _kind, _label in [
+        ('nominal',     ''),
+        ('StatEleUp',   'StatEleUp'),
+        ('StatEleDown', 'StatEleDown'),
+        ('StatMuUp',    'StatMuUp'),
+        ('StatMuDown',  'StatMuDown'),
+    ]:
+        _instance = f'fr_regions_{_inst_tag}_{_label or "nominal"}'
+        aliases[_name + _label] = {
+            'external'     : f'{macros}fake_rate_reader_regions.cc',
+            'linesToGlobal': [
+                f'fake_rate_reader_regions {_instance}'
+                f'("{fakerates_regions}", "{fakerates_regions_year}", '
+                f'"{eleWP}", "{muWP}", "{fakerates_bcat}", "{_mode}", "{_kind}");'
+            ],
+            'function'     : _instance,
+            # One instance for every multiplicity, unlike fake_rate_reader:
+            # the weight is the same matrix-method sum over prompt/fake
+            # assignments whatever the lepton count, so there is nothing to
+            # split and nothing to add up afterwards.
+            'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
+                              'SelLep_isTightMuon',
+                              'SelLep_isTightElectron'],
+            'samples'      : ['Fake'],
+        }
+
 #Top pT reweighting
 aliases['Top_pTrw'] = {
     'expr': '(topGenPt * antitopGenPt > 0.) * (TMath::Sqrt((0.103*TMath::Exp(-0.0118*topGenPt) - 0.000134*topGenPt + 0.973) * (0.103*TMath::Exp(-0.0118*antitopGenPt) - 0.000134*antitopGenPt + 0.973))) + (topGenPt * antitopGenPt <= 0.)',
