@@ -8,7 +8,12 @@ import re
 import inspect
 
 ALL = [skey for skey in samples]
-mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
+# Every Fake* sample is data carrying a fake weight, so none of them is MC.
+# The comparison samples (Fake_regions, Fake_lep1, Fake_1l in samples.py) have
+# to drop out of `mc` exactly as Fake does, or they inherit the MC-only
+# weights and aliases and die on the first gen-level branch.
+fakes = [skey for skey in samples if skey == 'Fake' or skey.startswith('Fake_')]
+mc = [skey for skey in samples if skey != 'DATA' and skey not in fakes]
 lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
 btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
@@ -290,7 +295,7 @@ for _c, _e in (
         ('muonIdx',         'ROOT::VecOps::RVec<int>(Lepton_muonIdx)')):
     aliases['SelLep_' + _c] = {
         'expr'   : f'Take({_e}, nLepSel)',
-        'samples': ['Fake'],
+        'samples': fakes,
     }
 
 for kind, label in [
@@ -330,12 +335,12 @@ for kind, label in [
                               'SelLep_isTightElectron',
                               'SelLep_muonIdx',
                               'CleanJet_pt', '(int)nCleanJet'],
-            'samples'      : ['Fake'],
+            'samples'      : fakes,
         }
 
     aliases['fakeW' + label] = {
         'expr'   : 'fakeW2l%s + fakeW3l%s' % (label, label),
-        'samples': ['Fake'],
+        'samples': fakes,
     }
 
 
@@ -400,7 +405,7 @@ for _name, _mode, _inst_tag in [
             'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
                               'SelLep_isTightMuon',
                               'SelLep_isTightElectron'],
-            'samples'      : ['Fake'],
+            'samples'      : fakes,
         }
 
 #Top pT reweighting

@@ -607,3 +607,26 @@ for _, sd in DataRun:
             datatag: DataTrig[pd]
         })
 
+# --- the same fakes, with the three region-split weights, to compare
+#
+# Same files, same trigger weights, same everything: only the fake weight
+# differs, so a plot with the four overlaid is a comparison of the weights
+# and of nothing else. See aliases.py for what each one reads.
+#   Fake         fakeW         -- the jet20/30/40 maps, as before
+#   Fake_regions fakeW_regions -- the map of the region the event is in
+#   Fake_lep1    fakeW_lep1    -- always the subleading-probe map
+#   Fake_1l      fakeW_1l      -- always the single-lepton map
+#
+# deepcopy and not a shared reference: 'name' and 'weights' are dicts, and
+# three samples pointing at one of them would make a later update to any of
+# them land in all four.
+import copy
+
+for _fake_sample, _fake_weight in [
+    ('Fake_regions', 'fakeW_regions'),
+    ('Fake_lep1',    'fakeW_lep1'),
+    ('Fake_1l',      'fakeW_1l'),
+]:
+    samples[_fake_sample] = copy.deepcopy(samples['Fake'])
+    samples[_fake_sample]['weight'] = 'METFilter_DATA*' + _fake_weight
+

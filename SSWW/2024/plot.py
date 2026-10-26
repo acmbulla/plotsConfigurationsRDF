@@ -68,6 +68,21 @@ groupPlot['Fake'] = {
     'fill'    : 1001,
 }
 
+# One group each, not one group of four: grouped together they would be
+# stacked into a single sum, and the point is to read them apart.
+for _fake_sample, _fake_label, _fake_colour in [
+    ('Fake_regions', 'Nonprompt (region maps)',  'MediumBlue'),
+    ('Fake_lep1',    'Nonprompt (lep1 maps)',    'DarkBlue'),
+    ('Fake_1l',      'Nonprompt (1-lepton maps)', 'Orange'),
+]:
+    groupPlot[_fake_sample] = {
+        'nameHR'  : _fake_label,
+        'isSignal': 0,
+        'color'   : rgb(*palette[_fake_colour]),
+        'samples' : [_fake_sample],
+        'fill'    : 1001,
+    }
+
 groupPlot['WZ_EWK'] = {
     'nameHR'  : 'WZ EWK',
     'isSignal': 0,
@@ -294,6 +309,16 @@ plot['Fake'] = {
     'isData'  : 0,
     'scale'   : 1.0,
 }
+
+for _fake_sample, _fake_colour in [('Fake_regions', 'MediumBlue'),
+                                   ('Fake_lep1',    'DarkBlue'),
+                                   ('Fake_1l',      'Orange')]:
+    plot[_fake_sample] = {
+        'color'   : rgb(*palette[_fake_colour]),
+        'isSignal': 0,
+        'isData'  : 0,
+        'scale'   : 1.0,
+    }
 
 
 
