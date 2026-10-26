@@ -68,8 +68,15 @@ Per ciascuna variante si aggiungono:
 7. `prompt_rate_eta<k>`: il prompt rate vecchio (`ElePR.root` / `MuonPR.root`)
    contro quello nuovo di primo e secondo leptone, una figura per bin |eta|
    del file vecchio. Le curve finiscono in `prompt_rate_*.csv/.json`.
+8. `legacy_vs_measured_<jcat>`: lo stesso confronto del punto 6 dentro un
+   singolo bin di jet, una figura per categoria trovata. La mappa vecchia non
+   è binnata nella molteplicità di jet — è binnata nel pT del jet di rinculo —
+   quindi la sua curva è identica in tutte queste figure; quello che cambia è
+   la fetta della misura nuova contro cui viene messa. Serve proprio a vedere
+   quale bin di jet il singolo numero vecchio stia descrivendo.
 
-`--legacy-jet` limita le soglie sovrapposte. Se per una WP le mappe vecchie
+`--legacy-bcat` sceglie la categoria b delle curve nuove nei punti 5, 6 e 8
+(default `bveto`). `--legacy-jet` limita le soglie sovrapposte. Se per una WP le mappe vecchie
 non ci sono, i confronti legacy vengono saltati e segnalati in stdout e in
 `manifest.json` (`legacy_missing`): non e un errore, perche le WP prodotte
 nelle due campagne non coincidono.

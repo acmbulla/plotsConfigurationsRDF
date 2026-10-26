@@ -313,6 +313,8 @@ def main():
     ap.add_argument('--legacy-input', help='old recoil-jet maps, e.g. .../FakeRate/2024_v15_pt; adds the jet-threshold scan, the old-vs-new overlay and the prompt-rate comparison')
     ap.add_argument('--legacy-jet', nargs='+', type=int, help='jet pT thresholds to overlay (default: every one found)')
     ap.add_argument('--legacy-nominal-jet', type=int, default=30, help='threshold the analysis weight reads (default 30)')
+    ap.add_argument('--legacy-bcat', choices=list(BCATS), default='bveto',
+                    help='b category of the measured curves in the legacy overlays (default bveto)')
     args = ap.parse_args()
     variants = ['ewk','corrected'] if args.variant == 'both' else [args.variant]
     channels = list(dict.fromkeys(args.two_lepton_channels))
@@ -438,13 +440,35 @@ def main():
                           [(key, f'vecchio · jet > {key.split("jet")[1]} GeV') for key in jet_keys]
                           + [('2l_lep0/bveto', 'nuovo · 2 lep, primo lep · bveto')],
                           f'{flavor} · {context} · soglia del jet di rinculo'))
+            bcat = args.legacy_bcat
+            nominal = (f'legacy/jet{args.legacy_nominal_jet}',
+                       f'vecchio · jet > {args.legacy_nominal_jet} GeV (quello del peso)')
+            # The three cases of the new measurement, in one category.
+            # `present_only` drops the ones that were not measured, which is
+            # right for a jet bin -- it is opt-in -- and wrong for the b
+            # category, where overlay() must still flag it as [mancante].
+            def case_entries(cat, present_only):
+                return [(f'{case}/{cat}', f'nuovo · {label} · {cat}')
+                        for case, label in (('1l', '1 lep'),
+                                            ('2l_lep0', '2 lep, primo lep'),
+                                            ('2l_lep1', '2 lep, secondo lep'))
+                        if not present_only or f'{case}/{cat}' in curves]
             plots.append(('legacy_vs_measured',
-                          [(f'legacy/jet{args.legacy_nominal_jet}',
-                            f'vecchio · jet > {args.legacy_nominal_jet} GeV (quello del peso)'),
-                           ('1l/bveto', 'nuovo · 1 lep · bveto'),
-                           ('2l_lep0/bveto', 'nuovo · 2 lep, primo lep · bveto'),
-                           ('2l_lep1/bveto', 'nuovo · 2 lep, secondo lep · bveto')],
+                          [nominal] + case_entries(bcat, False),
                           f'{flavor} · {context} · mappe vecchie vs nuove'))
+            # The same comparison inside one jet bin. The old map is not binned
+            # in jet multiplicity at all -- it is binned in the pT of the
+            # recoil jet -- so its curve is identical in every one of these
+            # plots; what changes is the slice of the new measurement held
+            # against it. That is the point: it shows which jet bin the single
+            # old number is actually describing.
+            for jcat in jetcats:
+                entries = case_entries(f'{bcat}_{jcat}', True)
+                if not entries:
+                    continue
+                plots.append((f'legacy_vs_measured_{jcat}', [nominal] + entries,
+                              f'{flavor} · {context} · mappe vecchie vs nuove · '
+                              f'{JETCATS[jcat]}'))
         for name,entries,title in plots:
             name = f'{name}_{variant_tag}'
             title = f'{title} · {variant_tag}'
