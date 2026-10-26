@@ -446,8 +446,13 @@ def main():
                            if f'{case}/{bcat}_{jcat}' in curves]
                 if not entries:
                     continue
-                plots.append((f'{case}_{bcat}_jetbins',
-                              [(f'{case}/{bcat}', f'{blabel} · tutti i jet')] + entries,
+                # The jet-inclusive curve of the same b category leads when it
+                # exists. It often does not: --jetcat without 'incl' measures
+                # the bins only, and demanding it would mark every one of these
+                # plots partial over a curve that was never asked for.
+                lead = ([(f'{case}/{bcat}', f'{blabel} · tutti i jet')]
+                        if f'{case}/{bcat}' in curves else [])
+                plots.append((f'{case}_{bcat}_jetbins', lead + entries,
                               f'{flavor} · {context} · {CASES[case]} · {blabel} · bin di jet'))
         jet_keys = sorted((key for key in curves if key.startswith('legacy/jet')),
                           key=lambda key: int(key.split('jet')[1]))
@@ -485,6 +490,15 @@ def main():
                 plots.append((f'legacy_vs_measured_{jcat}', [nominal] + entries,
                               f'{flavor} · {context} · mappe vecchie vs nuove · '
                               f'{JETCATS[jcat]}'))
+                # And one figure per lepton case. With three cases plus the old
+                # curve on one axis the old one is a flat line far below and
+                # the cases overlap; separated, each is readable against it.
+                for key, label in entries:
+                    case = key.split('/')[0]
+                    plots.append((f'legacy_vs_measured_{jcat}_{case}',
+                                  [nominal, (key, label)],
+                                  f'{flavor} · {context} · mappe vecchie vs nuove · '
+                                  f'{JETCATS[jcat]} · {CASES[case]}'))
         for name,entries,title in plots:
             # Nothing measured at all: an overlay of only [mancante] entries is
             # a blank figure that says less than its absence does.

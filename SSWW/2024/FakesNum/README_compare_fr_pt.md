@@ -87,7 +87,18 @@ Per ciascuna variante si aggiungono:
    la fetta della misura nuova contro cui viene messa. Serve proprio a vedere
    quale bin di jet il singolo numero vecchio stia descrivendo.
 
-`--legacy-bcat` sceglie la categoria b delle curve nuove nei punti 5, 6 e 8
+9. `legacy_vs_measured_<jcat>_<caso>`: lo stesso del punto 8 ma **una figura
+   per caso di leptone**, cioè la mappa vecchia contro una sola curva nuova.
+   Con tre casi più la vecchia su un asse solo, la vecchia resta una riga
+   piatta molto in basso e i tre casi si sovrappongono; separati, ognuno si
+   legge contro di lei.
+
+Nei confronti dei bin di jet (punto 8 della sezione precedente e i `_jetbins`)
+la curva jet-inclusiva compare solo **se esiste**: `--jetcat` senza `incl`
+misura i soli bin, e pretenderla segnerebbe ogni figura come parziale per una
+curva che non era stata chiesta.
+
+`--legacy-bcat` sceglie la categoria b delle curve nuove nei punti 5, 6, 8 e 9
 (default `bveto`). `--legacy-jet` limita le soglie sovrapposte. Se per una WP le mappe vecchie
 non ci sono, i confronti legacy vengono saltati e segnalati in stdout e in
 `manifest.json` (`legacy_missing`): non e un errore, perche le WP prodotte
