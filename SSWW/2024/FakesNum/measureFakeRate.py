@@ -94,6 +94,20 @@ DOUBLE_TRIGGERS = (
 )
 TRIGGERS = ALL_SINGLE + DOUBLE_TRIGGERS
 BCATS = {'incl': None, 'bveto': ('zero', 20.), 'btag': ('one', 30.)}
+# Jet-multiplicity categories, as (min, max) on the number of CleanJets above
+# 20 GeV; max None means no upper bound. A second, independent axis next to
+# BCATS rather than more entries in it: 'bveto' asks how many of the jets are
+# b-tagged and this asks how many there are at all, so the two cross, and
+# bveto-with-one-jet is a category one wants.
+#
+# 'j2' is inclusive, so the three of j0/j1/j2 partition the sample and nothing
+# falls outside. That is also the bin the rate is applied in -- the SSWW
+# supercut requires two jets -- which is why the inclusive one carries the
+# short name. 'j2excl' and 'j3' are there for checking that the plateau above
+# two jets is really flat; they are not part of the partition.
+JETCATS = {'incl': None, 'j0': (0, 0), 'j1': (1, 1), 'j2': (2, None),
+           'j2excl': (2, 2), 'j3': (3, None)}
+JET_PT_MIN = 20.
 DEFAULT_PT = '10,15,20,25,30,35,45,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
 REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
@@ -126,6 +140,10 @@ CTRL_VARS = {
     'mll': ((0., 200., 40), r'$m_{\ell\ell}$ [GeV]'),
     'met': ((0., 120., 24), r'PuppiMET [GeV]'),
     'mt0': ((0., 150., 30), r'$m_{T}(\ell_{0})$ [GeV]'),
+    # The variable the jet categories cut on. Worth a look before trusting a
+    # jet-binned rate: a data/MC disagreement in the multiplicity itself moves
+    # the subtraction differently in every jet bin.
+    'njet': ((0., 6., 6), r'$N_{jet}$ ($p_{T} > 20$ GeV)'),
 }
 # Control plots are made for these regions only, and with no b-category split:
 # the top CR already requires a b-tag, so crossing it with 'bveto' is empty by
@@ -207,7 +225,7 @@ def hist1(x, w, bins):
     return np.histogram(x, bins=bins, weights=w)[0]
 
 
-def map_definitions(ele_wps, mu_wps, bcats):
+def map_definitions(ele_wps, mu_wps, bcats, jetcats=('incl',)):
     """One entry per output map.
 
     The fake rate is measured in every requested b category: which jet made
@@ -215,26 +233,40 @@ def map_definitions(ele_wps, mu_wps, bcats):
     from a light-jet fake, with a different weight in the measurement and in
     the application region.
 
+    It is measured in every requested jet-multiplicity category for the same
+    reason one step out: the fake needs a jet to come from, and how many jets
+    the event has changes both the chance that one of them is the parent and
+    how much other activity sits around the probe. The categories cross with
+    the b ones.
+
+    The jet suffix is appended only when it is not 'incl', so the default
+    option set produces exactly the map names it always did -- which matters,
+    because fake_rate_reader_class.cc and compare_fr_pt.py look these up by
+    name.
+
     The prompt rate is measured inclusively and only there. It lives under the
-    Z peak on prompt leptons, where a b requirement selects top rather than a
-    different kind of prompt lepton, and splitting it would only divide the
-    statistics of a quantity that does not depend on the split.
+    Z peak on prompt leptons, where a b or jet requirement selects top or
+    Z+jets rather than a different kind of prompt lepton, and splitting it
+    would only divide the statistics of a quantity that does not depend on the
+    split.
     """
     out = []
     for flav, wps, tag, sf in (('ele', ele_wps, 'Ele', 'ee'),
                                 ('mu', mu_wps, 'Muon', 'mumu')):
         for wp in wps:
             for bcat in bcats:
-                out.extend([
-                    (f'{tag}FR_1l_{bcat}', flav, 0, 'FR', '1l', wp, bcat),
-                    (f'{tag}FR_{sf}_lep0_{bcat}', flav, 0, 'FR', 'ss_sf', wp, bcat),
-                    (f'{tag}FR_{sf}_lep1_{bcat}', flav, 1, 'FR', 'ss_sf', wp, bcat),
-                    (f'{tag}FR_emu_lep0_{bcat}', flav, 0, 'FR', 'ss_df', wp, bcat),
-                    (f'{tag}FR_emu_lep1_{bcat}', flav, 1, 'FR', 'ss_df', wp, bcat),
-                ])
+                for jcat in jetcats:
+                    j = '' if jcat == 'incl' else f'_{jcat}'
+                    out.extend([
+                        (f'{tag}FR_1l_{bcat}{j}', flav, 0, 'FR', '1l', wp, bcat, jcat),
+                        (f'{tag}FR_{sf}_lep0_{bcat}{j}', flav, 0, 'FR', 'ss_sf', wp, bcat, jcat),
+                        (f'{tag}FR_{sf}_lep1_{bcat}{j}', flav, 1, 'FR', 'ss_sf', wp, bcat, jcat),
+                        (f'{tag}FR_emu_lep0_{bcat}{j}', flav, 0, 'FR', 'ss_df', wp, bcat, jcat),
+                        (f'{tag}FR_emu_lep1_{bcat}{j}', flav, 1, 'FR', 'ss_df', wp, bcat, jcat),
+                    ])
             out.extend([
-                (f'{tag}PR_{sf}_lep0', flav, 0, 'PR', 'dy', wp, 'incl'),
-                (f'{tag}PR_{sf}_lep1', flav, 1, 'PR', 'dy', wp, 'incl'),
+                (f'{tag}PR_{sf}_lep0', flav, 0, 'PR', 'dy', wp, 'incl', 'incl'),
+                (f'{tag}PR_{sf}_lep1', flav, 1, 'PR', 'dy', wp, 'incl', 'incl'),
             ])
     return out
 
@@ -414,6 +446,16 @@ def process_file(payload):
               for thr in (20., 30.)}
     bmask = {'incl': np.ones(n, dtype=bool),
              'bveto': nbtags[20.] == 0, 'btag': nbtags[30.] >= 1}
+    # Jet multiplicity above JET_PT_MIN, counted on CleanJet -- the collection
+    # the b-tag categories count on too, so the two axes see the same jets.
+    njets = ak.to_numpy(ak.sum(a['CleanJet_pt'] > JET_PT_MIN, axis=1))
+    jmask = {'incl': np.ones(n, dtype=bool)}
+    for cat, bounds in JETCATS.items():
+        if bounds is None:
+            continue
+        low, high = bounds
+        jmask[cat] = ((njets >= low) if high is None else
+                      ((njets >= low) & (njets <= high)))
     isss = ak.to_numpy(a['isSS']).astype(bool)
     isee = ak.to_numpy(a['isEE']).astype(bool)
     isos = ak.to_numpy(a['isOS']).astype(bool)
@@ -450,8 +492,9 @@ def process_file(payload):
             tight[flav, wp] = pad2(a[prefix + wp]).astype(bool)
     acc = {}
     # Histograms for maps: (mapname, tight/rest, data/mc, sumw/sumw2)
-    for name, flav, i, kind, chan, wp, bcat in cfg['maps']:
-        sel = (region[chan] & trig[chan][flav] & bmask[bcat] & (nlep > i) &
+    for name, flav, i, kind, chan, wp, bcat, jcat in cfg['maps']:
+        sel = (region[chan] & trig[chan][flav] & bmask[bcat] &
+               jmask[jcat] & (nlep > i) &
                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                loose[flav][:, i] & np.isfinite(pt[:, i]) &
                np.isfinite(eta[:, i]) & np.isfinite(weight) & (weight != 0))
@@ -504,7 +547,8 @@ def process_file(payload):
                         t = tight[flav, wp][sel, i]
                         quantity = {'pt': pt[sel, i], 'eta': eta[sel, i],
                                     'mll': mll[sel], 'met': met[sel],
-                                    'mt0': mt0[sel]}
+                                    'mt0': mt0[sel],
+                                    'njet': njets[sel].astype(float)}
                         # Split MC into prompt and nonprompt for composition.
                         labels = [('data', np.ones(len(w), dtype=bool))] if is_data else [
                             (sample + '_prompt', prompt[sel, i]),
@@ -991,8 +1035,9 @@ PART_PREFIX = 'part_'
 UNREADABLE = 'UNREADABLE'
 
 
-CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'ctrl_regions',
-                    'ctrl_vars', 'ctrl_bcat', 'sf_bcat', 'bins', 'lumi')
+CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'jetcats',
+                    'ctrl_regions', 'ctrl_vars', 'ctrl_bcat', 'sf_bcat',
+                    'bins', 'lumi')
 
 
 def dump_partial(path, acc, problems, cfg, files):
@@ -1203,6 +1248,7 @@ def batch_args(args, cfg):
     for flag, values in (('--ele-wp', cfg['ele_wps']),
                          ('--mu-wp', cfg['mu_wps']),
                          ('--bcat', cfg['bcats']),
+                         ('--jetcat', cfg['jetcats']),
                          ('--ctrl-wp', cfg['ctrl_wps']),
                          ('--ctrl-region', cfg['ctrl_regions']),
                          ('--ctrl-var', cfg['ctrl_vars'])):
@@ -1233,6 +1279,14 @@ def main():
     ap.add_argument('--ele-wp', action='append', default=[])
     ap.add_argument('--mu-wp', action='append', default=[])
     ap.add_argument('--bcat', action='append', choices=sorted(BCATS), default=[])
+    ap.add_argument('--jetcat', action='append', choices=sorted(JETCATS),
+                    default=[],
+                    help='jet-multiplicity categories to measure the fake '
+                         'rate in, on jets above %g GeV. Repeatable, crossed '
+                         'with --bcat. j0/j1/j2 partition the sample (j2 is '
+                         'inclusive); default is the single inclusive '
+                         'category, which reproduces the old map names'
+                         % JET_PT_MIN)
     ap.add_argument('--btag-wp', choices=sorted(BTAG_WPS), default='loose')
     ap.add_argument('--loose-ele', default='')
     ap.add_argument('--loose-mu', default='')
@@ -1356,9 +1410,13 @@ def main():
     if not args.merge and not ele_wps and not mu_wps:
         ap.error('No tight working points found')
     bcats = args.bcat or ['incl', 'bveto', 'btag']
+    # Not defaulted to the j0/j1/j2 split: that would triple every map and
+    # rename none of them, so a run made before this option existed and one
+    # made after would disagree without saying so.
+    jetcats = args.jetcat or ['incl']
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
             'mu': (args.pt_bins, args.eta_bins_mu)}
-    maps = map_definitions(ele_wps, mu_wps, bcats)
+    maps = map_definitions(ele_wps, mu_wps, bcats, jetcats)
     ctrl_wps = args.ctrl_wp or ele_wps[:1] + mu_wps[:1]
     unknown_ctrl = [w for w in ctrl_wps if w not in set(ele_wps + mu_wps)]
     if unknown_ctrl:
@@ -1368,7 +1426,8 @@ def main():
                ctrl_regions=args.ctrl_region or list(CTRL_REGIONS),
                ctrl_vars=args.ctrl_var or list(DEFAULT_CTRL_VARS),
                ctrl_bcat=args.ctrl_bcat, sf_bcat=args.sf_bcat,
-               all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats, bins=bins,
+               all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats,
+               jetcats=jetcats, bins=bins,
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
                loose_mu=args.loose_mu, btag_thr=BTAG_WPS[args.btag_wp],
                retries=args.retries, top_met_min=args.top_met_min,
@@ -1380,6 +1439,8 @@ def main():
           f'({", ".join(f"{k}: {v[0]}" for k, v in SINGLE_TRIGGERS.items())}); '
           f'2l regions the full analysis OR of {len(TRIGGERS)} paths',
           flush=True)
+    print(f'Categories: b {bcats}; jets {jetcats} '
+          f'(on CleanJet above {JET_PT_MIN:g} GeV)', flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
           f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
           f'MET>{args.top_met_min}, mll>{args.top_mll_min}, '
@@ -1444,6 +1505,13 @@ def main():
         cfg.update(job_cfg)
         ele_wps, mu_wps = cfg['ele_wps'], cfg['mu_wps']
         bcats, bins, maps = cfg['bcats'], cfg['bins'], cfg['maps']
+        # Parts dumped before the jet axis existed carry 7-field maps and no
+        # 'jetcats'. They are jet-inclusive by construction, so they are
+        # normalised rather than refused: the alternative is a tuple-unpacking
+        # traceback a few hundred lines further down.
+        maps = [t if len(t) == 8 else tuple(t) + ('incl',) for t in maps]
+        cfg['maps'] = maps
+        jetcats = cfg.setdefault('jetcats', ['incl'])
         done, missing = check_batch(args.batch_dir)
         print(f'Merged {nparts} partial results from {parts_dir}')
         if missing:
@@ -1489,7 +1557,7 @@ def main():
         return total.get(('map', name, part, source, moment), np.zeros(shape))
     written = 0
     comparisons = []
-    for name, flav, i, kind, _, wp, _ in maps:
+    for name, flav, i, kind, _, wp, _, _ in maps:
         if args.plots_only:
             break
         xb, yb = bins[flav]
