@@ -607,26 +607,39 @@ for _, sd in DataRun:
             datatag: DataTrig[pd]
         })
 
-# --- the same fakes, with the three region-split weights, to compare
+# --- the three region-split weights, as subsamples of this one sample
 #
-# Same files, same trigger weights, same everything: only the fake weight
-# differs, so a plot with the four overlaid is a comparison of the weights
-# and of nothing else. See aliases.py for what each one reads.
-#   Fake         fakeW         -- the jet20/30/40 maps, as before
-#   Fake_regions fakeW_regions -- the map of the region the event is in
-#   Fake_lep1    fakeW_lep1    -- always the subleading-probe map
-#   Fake_1l      fakeW_1l      -- always the single-lepton map
+# Subsamples and not four samples: the four differ only in the weight, so
+# four samples would read the whole data file list four times for one pass
+# worth of events. A subsample is another set of histograms booked on the
+# same RDataFrame node, so this is one pass.
 #
-# deepcopy and not a shared reference: 'name' and 'weights' are dicts, and
-# three samples pointing at one of them would make a later update to any of
-# them land in all four.
-import copy
-
-for _fake_sample, _fake_weight in [
-    ('Fake_regions', 'fakeW_regions'),
-    ('Fake_lep1',    'fakeW_lep1'),
-    ('Fake_1l',      'fakeW_1l'),
-]:
-    samples[_fake_sample] = copy.deepcopy(samples['Fake'])
-    samples[_fake_sample]['weight'] = 'METFilter_DATA*' + _fake_weight
+# Each one lands as histo_Fake_<subsample> in the usual <cut>/<variable>
+# folder -- exactly the name a sample called Fake_<subsample> would have
+# written -- so plot.py names them that way and nothing downstream has to
+# know the difference.
+#
+# Two things about the syntax, both of which bite:
+#
+#  1. the subsample weight MULTIPLIES the sample weight (mkShapes.py:287
+#     builds my_sample_weight_<sample>_<sub> as my_sample_weight * weight).
+#     So fakeW has to come out of the sample weight and go into each
+#     subsample, otherwise every subsample would carry two fake weights.
+#     The price is that the no-subsample histogram, histo_Fake, is now the
+#     unweighted data: it is written and left unread, which is why plot.py
+#     has no 'Fake' entry any more but a 'Fake_nominal' one.
+#
+#  2. a subsample with only a weight books NOTHING. mkShapes.py:324 wraps
+#     the booking in `if 'cut' in sub_cut_name`, so a weight-only subsample
+#     defines its weight column and no histogram ever uses it. Hence the
+#     always-true cut. `nLepSel >= 0` and not `true`: it is unambiguously
+#     bool to the JIT, and nLepSel is defined for every sample.
+samples['Fake']['weight'] = 'METFilter_DATA'
+samples['Fake']['subsamples'] = {
+    #             always-true cut          the weight to compare
+    'nominal': {'cut': 'nLepSel >= 0', 'weight': 'fakeW'},
+    'regions': {'cut': 'nLepSel >= 0', 'weight': 'fakeW_regions'},
+    'lep1'   : {'cut': 'nLepSel >= 0', 'weight': 'fakeW_lep1'},
+    '1l'     : {'cut': 'nLepSel >= 0', 'weight': 'fakeW_1l'},
+}
 

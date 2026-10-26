@@ -60,11 +60,14 @@ groupPlot['Wrong sign'] = {
     'fill'    : 1001,
 }
 
-groupPlot['Fake'] = {
+# 'Fake_nominal' and not 'Fake': the fake weight now lives in the subsamples
+# (samples.py), so the plain histo_Fake is the unweighted data and is left
+# unread. histo_Fake_nominal is the old fakeW, unchanged.
+groupPlot['Fake_nominal'] = {
     'nameHR'  : 'Nonprompt',
     'isSignal': 0,
     'color'   : rgb(*palette["LightBlue"]),
-    'samples' : ['Fake'],
+    'samples' : ['Fake_nominal'],
     'fill'    : 1001,
 }
 
@@ -303,7 +306,7 @@ plot['tVx'] = {
     'scale'   : 1.0,
 }
 
-plot['Fake'] = {
+plot['Fake_nominal'] = {
     'color'   : rgb(*palette["Violet"]),
     'isSignal': 0,
     'isData'  : 0,
