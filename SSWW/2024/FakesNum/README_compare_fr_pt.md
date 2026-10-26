@@ -29,6 +29,24 @@ Sono quindi otto grafici PNG/PDF per flavor/WP. `index.html` li raccoglie;
 `curves_EWK.csv/.json` e `curves_EWKcorr.csv/.json` conservano separatamente
 valori, errori e ingredienti integrati. `manifest.json` indica le varianti.
 
+## Bin di molteplicità di jet
+
+Se l'input contiene anche le mappe jet-binnate (`measureFakeRate.py --jetcat`,
+nomi con suffisso `_j0`, `_j1`, `_j2`), ogni categoria b guadagna un confronto
+in più: la sua curva inclusiva nei jet contro i suoi bin di jet, cioè
+`<caso>_<bcat>_jetbins_<variante>.png/.pdf`. Con le tre categorie b e i tre
+casi sono nove grafici per variante, in aggiunta ai quattro di sopra.
+
+Quelle mappe sono facoltative. Se non ci sono, non viene segnalato nulla,
+perché lo split è opzionale al momento della misura; se però ne esiste solo
+una parte -- per esempio `ee_lep1_incl_j1` senza `emu_lep1_incl_j1`, che
+verrebbero sommati -- la mancanza viene riportata come per gli altri casi, e
+senza `--allow-missing` lo script si ferma. `--jet-cat` restringe le categorie
+da includere; il default sono tutte quelle trovate.
+
+Nei CSV la colonna si chiama `cat` (prima `bcat`) e per queste curve contiene
+la categoria b più il bin di jet, p.es. `bveto_j1`.
+
 ## Confronto con le mappe vecchie (jet di rinculo)
 
 Con `--legacy-input` si aggiungono le mappe vecchie, quelle binnate nella

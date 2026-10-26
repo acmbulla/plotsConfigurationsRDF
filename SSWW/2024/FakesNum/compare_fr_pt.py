@@ -5,6 +5,12 @@ Per flavor/WP and subtraction variant: one inclusive 1l/2l-lep0/2l-lep1
 overlay and three inclusive/btag/bveto overlays. Default: separate EWK and
 EWKcorr files, points with error bars only. 2l combines SS SF+DF.
 
+When the input also holds the jet-binned maps (measureFakeRate.py --jetcat,
+file names suffixed _j0/_j1/_j2), each b category additionally gets an
+overlay of its jet-multiplicity bins against its jet-inclusive curve. Those
+maps are optional: absent, nothing is reported, because the split is opt-in
+at measurement time.
+
 With --legacy-input, the old recoil-jet-pT maps (EleFR_jet<thr>.root and
 ElePR.root, the ones fake_rate_reader_class.cc reads) are overlaid as well:
 one plot scanning the jet threshold, one comparing the threshold the weight
@@ -34,7 +40,15 @@ import uproot
 TAGS = {'ele': ('Ele', 'ee'), 'mu': ('Muon', 'mumu')}
 CASES = {'1l': '1 lep', '2l_lep0': '2 lep — primo lep', '2l_lep1': '2 lep — secondo lep'}
 BCATS = {'incl': 'inclusive', 'btag': 'bjet', 'bveto': 'bveto'}
+# Jet-multiplicity categories as measureFakeRate.py names them, with the label
+# each one carries in the plots. Insertion order is the order they are drawn.
+JETCATS = {'j0': '0 jet', 'j1': '1 jet', 'j2': '≥2 jet',
+           'j2excl': '2 jet esatti', 'j3': '≥3 jet'}
+# Longest first: ordered alternation, so 'j2' must not shadow 'j2excl' and
+# leave 'excl' to be matched by '\.root$'.
+_JETPAT = '|'.join(sorted(JETCATS, key=len, reverse=True))
 MAP_NAME = re.compile(r'^(Ele|Muon)(?:FR_(?:1l|ee_lep[01]|mumu_lep[01]|emu_lep[01])_(?:incl|btag|bveto)'
+                      r'(?:_(?:' + _JETPAT + r'))?'
                       r'|PR_(?:ee|mumu)_lep[01])\.root$')
 # The old maps: one per recoil-jet pT threshold, plus a single prompt rate.
 LEGACY_FR = re.compile(r'^(Ele|Muon)FR_jet(\d+)\.root$')
@@ -226,12 +240,14 @@ def legacy_maps(legacy, wp, flavor):
     return found
 
 
-def needed_names(flavor, case, bcat, channels):
+def needed_names(flavor, case, cat, channels):
+    """`cat` is the category suffix of the file name: a b category on its own
+    ('incl', 'bveto', 'btag') or one crossed with a jet bin ('bveto_j1')."""
     tag, sf = TAGS[flavor]
     if case == '1l':
-        return [f'{tag}FR_1l_{bcat}.root']
+        return [f'{tag}FR_1l_{cat}.root']
     slot = 0 if case == '2l_lep0' else 1
-    return [f'{tag}FR_{sf if channel == "sf" else "emu"}_lep{slot}_{bcat}.root'
+    return [f'{tag}FR_{sf if channel == "sf" else "emu"}_lep{slot}_{cat}.root'
             for channel in channels]
 
 
@@ -291,6 +307,8 @@ def main():
     ap.add_argument('--variant', choices=['both','corrected','ewk','raw'], default='both',
                     help='both (default): separate EWK and EWKcorr outputs; corrected selects EWKcorr only')
     ap.add_argument('--two-lepton-channels', nargs='+', choices=['sf','df'], default=['sf','df'])
+    ap.add_argument('--jet-cat', nargs='+', choices=list(JETCATS), default=list(JETCATS),
+                    help='jet-multiplicity categories to pick up when the input has them (default: all)')
     ap.add_argument('--allow-missing', action='store_true', help='mark incomplete curves missing; never merge only part of the requested channels')
     ap.add_argument('--legacy-input', help='old recoil-jet maps, e.g. .../FakeRate/2024_v15_pt; adds the jet-threshold scan, the old-vs-new overlay and the prompt-rate comparison')
     ap.add_argument('--legacy-jet', nargs='+', type=int, help='jet pT thresholds to overlay (default: every one found)')
@@ -298,6 +316,7 @@ def main():
     args = ap.parse_args()
     variants = ['ewk','corrected'] if args.variant == 'both' else [args.variant]
     channels = list(dict.fromkeys(args.two_lepton_channels))
+    jetcats = [jcat for jcat in JETCATS if jcat in args.jet_cat]
     args.out.mkdir(parents=True,exist_ok=True)
     os.environ.setdefault('MPLCONFIGDIR',str((args.out/'.matplotlib').resolve()))
     import matplotlib
@@ -324,18 +343,26 @@ def main():
         for variant in variants:
             curves = {}; axes = None
             for case in CASES:
+                # A b category is expected and its absence is reported. A jet
+                # category is opt-in at measurement time, so absent means it
+                # was not measured and nothing is said -- but a *partly*
+                # present one is still a gap, by the same rule the channels
+                # follow: never merge only some of the requested maps.
                 for bcat in BCATS:
-                    names = needed_names(flavor,case,bcat,channels)
-                    absent = [name for name in names if name not in files]
-                    if absent:
-                        missing.append(f'{relative}/{flavor}/{case}/{bcat}: '+', '.join(absent))
-                        continue
-                    curve = project_pt([read_counts(files[name],variant) for name in names])
-                    curve['sources'] = [files[name] for name in names]
-                    if axes is not None:
-                        same_edges(axes[0],curve['pt_edges'],'pT');same_edges(axes[1],curve['eta_edges'],'eta')
-                    axes = curve['pt_edges'],curve['eta_edges']
-                    curves[f'{case}/{bcat}'] = curve
+                    for cat, required in ([(bcat, True)] +
+                                          [(f'{bcat}_{jcat}', False) for jcat in jetcats]):
+                        names = needed_names(flavor,case,cat,channels)
+                        absent = [name for name in names if name not in files]
+                        if absent:
+                            if required or len(absent) < len(names):
+                                missing.append(f'{relative}/{flavor}/{case}/{cat}: '+', '.join(absent))
+                            continue
+                        curve = project_pt([read_counts(files[name],variant) for name in names])
+                        curve['sources'] = [files[name] for name in names]
+                        if axes is not None:
+                            same_edges(axes[0],curve['pt_edges'],'pT');same_edges(axes[1],curve['eta_edges'],'eta')
+                        axes = curve['pt_edges'],curve['eta_edges']
+                        curves[f'{case}/{cat}'] = curve
             # Legacy curves keep their own pT binning (up to 50 GeV, 2 |eta|
             # bins), so they are added after the axis-consistency check above.
             pr_curves = {}; bands = []
@@ -392,6 +419,18 @@ def main():
                   f'{flavor} · {context} · inclusive')]
         plots += [(f'{case}_inclusive_bjet_bveto',[(f'{case}/{bcat}',label) for bcat,label in BCATS.items()],
                    f'{flavor} · {context} · {CASES[case]}') for case in CASES]
+        # One per case and b category, only where jet-binned maps were found.
+        # The jet-inclusive curve of the same b category leads, so the plot
+        # shows what the split does to the number the analysis uses today.
+        for case in CASES:
+            for bcat, blabel in BCATS.items():
+                entries = [(f'{case}/{bcat}_{jcat}', JETCATS[jcat]) for jcat in jetcats
+                           if f'{case}/{bcat}_{jcat}' in curves]
+                if not entries:
+                    continue
+                plots.append((f'{case}_{bcat}_jetbins',
+                              [(f'{case}/{bcat}', f'{blabel} · tutti i jet')] + entries,
+                              f'{flavor} · {context} · {CASES[case]} · {blabel} · bin di jet'))
         jet_keys = sorted((key for key in curves if key.startswith('legacy/jet')),
                           key=lambda key: int(key.split('jet')[1]))
         if jet_keys:
@@ -434,13 +473,13 @@ def main():
             with (folder/f'{stem}_{variant_tag}.csv').open('w',newline='') as stream:
                 writer=csv.writer(stream);writer.writerow(['case',first_column,'pt_low','pt_high','rate','stat_error','tight_subtracted','rest_subtracted','var_tight','var_rest','valid','physical'])
                 for key,c in table.items():
-                    case,bcat=key.split('/')
+                    case,bcat=key.split('/')      # 'bcat' may carry a jet suffix
                     for i in range(len(c['rate'])):
                         writer.writerow([case,bcat,c['pt_edges'][i],c['pt_edges'][i+1],
                                          cell(c['rate'][i]) if c['valid'][i] else '',cell(c['error'][i]) if c['valid'][i] else '',
                                          cell(c['tight'][i]),cell(c['rest'][i]),cell(c['var_tight'][i]),cell(c['var_rest'][i]),
                                          bool(c['valid'][i]),bool(c['physical'][i])])
-        dump(curves,'curves','bcat')
+        dump(curves,'curves','cat')
         if pr_curves:
             dump(pr_curves,'prompt_rate','eta_band')
         invalid=sum(int((~c['valid']).sum()) for c in curves.values())
