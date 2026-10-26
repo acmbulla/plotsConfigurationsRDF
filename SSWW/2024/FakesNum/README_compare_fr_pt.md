@@ -29,6 +29,59 @@ Sono quindi otto grafici PNG/PDF per flavor/WP. `index.html` li raccoglie;
 `curves_EWK.csv/.json` e `curves_EWKcorr.csv/.json` conservano separatamente
 valori, errori e ingredienti integrati. `manifest.json` indica le varianti.
 
+## Confronto con le mappe vecchie (jet di rinculo)
+
+Con `--legacy-input` si aggiungono le mappe vecchie, quelle binnate nella
+soglia del jet di rinculo che `fake_rate_reader_class.cc` legge davvero:
+
+```sh
+python compare_fr_pt.py \
+  --input   ../../utils/data/FakeRate/2024_v15_pt_measured \
+  --legacy-input ../../utils/data/FakeRate/2024_v15_pt \
+  --out confronti_FR_pt
+```
+
+Per ciascuna variante si aggiungono:
+
+5. `legacy_jet_scan`: tutte le soglie `*FR_jet<thr>.root` trovate, piu la
+   curva nuova 2lep/primo leptone/bveto come riferimento.
+6. `legacy_vs_measured`: la sola soglia che il peso usa (`--legacy-nominal-jet`,
+   default 30 GeV) contro 1lep/bveto, 2lep/lep0/bveto e 2lep/lep1/bveto.
+7. `prompt_rate_eta<k>`: il prompt rate vecchio (`ElePR.root` / `MuonPR.root`)
+   contro quello nuovo di primo e secondo leptone, una figura per bin |eta|
+   del file vecchio. Le curve finiscono in `prompt_rate_*.csv/.json`.
+
+`--legacy-jet` limita le soglie sovrapposte. Se per una WP le mappe vecchie
+non ci sono, i confronti legacy vengono saltati e segnalati in stdout e in
+`manifest.json` (`legacy_missing`): non e un errore, perche le WP prodotte
+nelle due campagne non coincidono.
+
+Tre differenze di contenuto da tenere presenti leggendo le figure:
+
+- **Binning.** Le mappe vecchie arrivano a 50 GeV in pT e hanno due bin in
+  **|eta|** (0, 1.479, 2.5); le nuove arrivano a 100 GeV e hanno dieci bin in
+  eta **con segno**. Le curve sono disegnate ognuna sul proprio binning, non
+  ribinnate.
+- **Integrazione in eta.** Nelle mappe vecchie il numeratore e il denominatore
+  sono salvati senza Sumw2, mentre la mappa del rate ha i suoi errori. Quindi
+  si integra con `FR = Σ num / Σ den` e si propaga
+  `Var(FR) = Σ (den_j/Σden)² Var(rate_j)`, cioe con i denominatori trattati
+  come pesi fissi. Non e la stessa formula usata per le mappe nuove, dove i
+  conteggi tight/rest hanno le loro varianze.
+- **Varianti.** La produzione vecchia ha una sola versione sottratta, quindi
+  `EWK` ed `EWKcorr` leggono lo stesso `FR_pT_eta_EWKcorr`; `raw` legge
+  `FR_pT_eta`. Il PR vecchio non ha varianti del tutto.
+
+Sul prompt rate c'e un dettaglio che conta per il peso: entrambe le macro
+leggono `h_Ele_signal_pt_eta_bin` / `h_Muon_signal_pt_eta_bin`, e nei file
+nuovi quell'istogramma e il PR **non sottratto** (`PR_pT_eta`), non
+`PR_pT_eta_EWKcorr`. Per questo nelle figure del prompt rate compaiono anche
+le due curve nuove senza sottrazione, etichettate come quelle che il peso usa
+davvero. I bin |eta| vecchi non hanno un bordo corrispondente nel binning
+nuovo (1.479 contro 1.5): il bordo viene agganciato al piu vicino e la banda
+effettivamente usata e scritta nel titolo, nel JSON (`eta_band`) e nel
+manifest.
+
 ## Definizioni
 
 - **2lep** unisce i canali same-sign SF e DF, per flavor e posizione del
@@ -109,7 +162,10 @@ ricostruire una WP già persa nei ROOT. Il producer non è stato modificato.
 python check_compare_fr_pt.py
 ```
 
-La verifica usa ROOT sintetici pesati e controlla proiezione dei conteggi,
+La verifica usa ROOT sintetici pesati e controlla, oltre ai confronti legacy
+(integrazione con i denominatori come pesi, bande |eta| agganciate, prompt
+rate vecchio contro nuovo, mappe vecchie assenti segnalate e non fatali),
+proiezione dei conteggi,
 sottrazione con SF dipendenti da eta, unione SF/DF, propagazione degli errori,
 tutti i32 confronti per2flavor×2WP×2varianti, assenza di linee tra punti, scelta EWK-only, mascheramento dei denominatori invalidi e
 rifiuto di mappe mancanti o prive di Sumw2. Per creare le fixture serve anche
