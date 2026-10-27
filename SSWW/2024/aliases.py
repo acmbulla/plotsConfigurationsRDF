@@ -357,15 +357,32 @@ for kind, label in [
 #
 # These are defined ALONGSIDE fakeW above, not in place of it: the point of
 # this branch is to compare them, which means pointing samples.py at one name
-# or another and rerunning. Only the b-veto maps are read, because the
-# analysis vetoes b jets; 'bveto' is the one string to change the day it does
-# not.
+# or another and rerunning.
 # Same tree as the jet20/30/40 maps above, so the same base: these live in
 # this repo, under utils/data/FakeRate/<year>/<WP>/, and the jobs read them
 # over xrootd from the clone on EOS.
+#
+# Which maps. The rate is applied in the signal region, which requires two
+# jets, so the >=2-jet bin is the one to read: the measurement put the muon
+# rate there 0.06-0.08 below the 0- and 1-jet bins at every pT, so the
+# jet-inclusive map overestimates it by 15-20% where it is used.
+#
+# Two things follow from that choice and neither is free:
+#
+#  1. jet-binned means b-INCLUSIVE. The jet-binned measurement was run with
+#     bcat='incl' only, so there is no bveto_j2 map to read and this is not a
+#     choice the string below can express. Going from the jet-inclusive
+#     'bveto' maps to these changes two things at once -- the jet bin and the
+#     b category -- which is worth remembering when the comparison moves.
+#  2. the prompt rate stays jet-inclusive. measureFakeRate.py writes one PR
+#     per region and no category at all, so f comes from >=2 jets and p from
+#     everything. Every denominator in the matrix method is (p - f), and p
+#     measured jet-inclusively is the more isolated population, hence too
+#     high -- which makes the fake weight f*p/(p-f) too SMALL, not too big.
 fakerates_regions = fakerates
-fakerates_regions_year = '2024_v15_pt_measured'
-fakerates_bcat = 'bveto'
+fakerates_regions_year = '2024_v15_pt_jetbinned'
+fakerates_bcat = 'incl'
+fakerates_jetcat = 'j2'
 
 # Three readers, one class: they differ only in which map a lepton is sent to.
 #   auto -- the region the event is actually in
@@ -395,7 +412,8 @@ for _name, _mode, _inst_tag in [
             'linesToGlobal': [
                 f'fake_rate_reader_regions {_instance}'
                 f'("{fakerates_regions}", "{fakerates_regions_year}", '
-                f'"{eleWP}", "{muWP}", "{fakerates_bcat}", "{_mode}", "{_kind}");'
+                f'"{eleWP}", "{muWP}", "{fakerates_bcat}", '
+                f'"{fakerates_jetcat}", "{_mode}", "{_kind}");'
             ],
             'function'     : _instance,
             # One instance for every multiplicity, unlike fake_rate_reader:
