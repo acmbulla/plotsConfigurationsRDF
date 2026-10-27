@@ -4,20 +4,29 @@
 
   That script writes, per working point, under <base>/<year>/<WP>/ :
 
-    EleFR_1l_<bcat>.root        MuonFR_1l_<bcat>.root
-    EleFR_ee_lep0_<bcat>.root   MuonFR_mumu_lep0_<bcat>.root
-    EleFR_ee_lep1_<bcat>.root   MuonFR_mumu_lep1_<bcat>.root
-    EleFR_emu_lep0_<bcat>.root  MuonFR_emu_lep0_<bcat>.root
-    EleFR_emu_lep1_<bcat>.root  MuonFR_emu_lep1_<bcat>.root
+    EleFR_1l_<cat>.root         MuonFR_1l_<cat>.root
+    EleFR_ee_lep0_<cat>.root    MuonFR_mumu_lep0_<cat>.root
+    EleFR_ee_lep1_<cat>.root    MuonFR_mumu_lep1_<cat>.root
+    EleFR_emu_lep0_<cat>.root   MuonFR_emu_lep0_<cat>.root
+    EleFR_emu_lep1_<cat>.root   MuonFR_emu_lep1_<cat>.root
     ElePR_ee_lep0.root          MuonPR_mumu_lep0.root
     ElePR_ee_lep1.root          MuonPR_mumu_lep1.root
 
-  with <bcat> in {incl, bveto, btag}. The fake rate is split by b category
-  because the rate of a lepton from a b decay is not the rate of a light-jet
-  fake; the prompt rate is measured inclusively and carries no <bcat>, and
-  it exists only in the same-flavour (Z peak) regions -- there is no emu or
+  where <cat> is "<bcat>" or "<bcat>_<jetcat>": two independent axes, with
+  <bcat> in {incl, bveto, btag} and <jetcat> in {j0, j1, j2, j2excl, j3}.
+  The fake rate is split by b category because the rate of a lepton from a b
+  decay is not the rate of a light-jet fake, and by jet multiplicity because
+  the measurement showed the muon rate in >=2 jets sitting 0.06-0.08 below
+  the 0- and 1-jet bins at every pT. measureFakeRate.py appends the jet
+  category only when it is not the inclusive one, so an empty <jetcat> here
+  reproduces the pre-jet-binning file names byte for byte.
+
+  The prompt rate carries neither category -- it is measured inclusively --
+  and it exists only in the same-flavour (Z peak) regions: there is no emu or
   1l prompt rate, so an electron always reads ElePR_ee_lep*, a muon always
-  MuonPR_mumu_lep*.
+  MuonPR_mumu_lep*. Applying a jet-binned fake rate against a
+  jet-inclusive prompt rate therefore mixes two populations; every
+  denominator below is (p - f), so that is where it shows.
 
   Histogram names, as measureFakeRate.py:write_root writes them:
     FR -> "FR_pT_eta_EWKcorr"   (EWK-subtracted and DY-reweighted)
@@ -77,6 +86,7 @@ public:
                            TString ele_WP,
                            TString muon_WP,
                            TString bcat    = "bveto",
+                           TString jetcat  = "",
                            TString mode    = "auto",
                            TString kind    = "nominal",
                            float   fr_pt_max = -1.);
@@ -117,6 +127,7 @@ fake_rate_reader_regions::fake_rate_reader_regions(TString base,
                                                    TString ele_WP,
                                                    TString muon_WP,
                                                    TString bcat,
+                                                   TString jetcat,
                                                    TString mode,
                                                    TString kind,
                                                    float   fr_pt_max)
@@ -128,6 +139,7 @@ fake_rate_reader_regions::fake_rate_reader_regions(TString base,
             << " ele WP " << ele_WP
             << " muon WP " << muon_WP
             << " bcat " << bcat
+            << " jetcat " << (jetcat == "" ? TString("-") : jetcat)
             << " mode " << mode
             << " kind " << kind << std::endl;
 
@@ -143,19 +155,23 @@ fake_rate_reader_regions::fake_rate_reader_regions(TString base,
   // not safe and a miss would be silent.
   const TString fr_histo = "FR_pT_eta_EWKcorr";
 
-  load("FR_ele_1l",  ele_dir  + "EleFR_1l_"   + bcat + ".root", fr_histo);
-  load("FR_mu_1l",   muon_dir + "MuonFR_1l_"  + bcat + ".root", fr_histo);
+  // The two category axes join into one file-name suffix here and nowhere
+  // else, so adding a third axis is one line.
+  const TString cat = (jetcat == "") ? bcat : bcat + "_" + jetcat;
+
+  load("FR_ele_1l",  ele_dir  + "EleFR_1l_"   + cat + ".root", fr_histo);
+  load("FR_mu_1l",   muon_dir + "MuonFR_1l_"  + cat + ".root", fr_histo);
 
   for (int i = 0; i < 2; ++i) {
     const TString slot = TString::Format("lep%d", i);
     load(Form("FR_ele_ee_%s", slot.Data()),
-         ele_dir  + "EleFR_ee_"    + slot + "_" + bcat + ".root", fr_histo);
+         ele_dir  + "EleFR_ee_"    + slot + "_" + cat + ".root", fr_histo);
     load(Form("FR_ele_emu_%s", slot.Data()),
-         ele_dir  + "EleFR_emu_"   + slot + "_" + bcat + ".root", fr_histo);
+         ele_dir  + "EleFR_emu_"   + slot + "_" + cat + ".root", fr_histo);
     load(Form("FR_mu_mumu_%s", slot.Data()),
-         muon_dir + "MuonFR_mumu_" + slot + "_" + bcat + ".root", fr_histo);
+         muon_dir + "MuonFR_mumu_" + slot + "_" + cat + ".root", fr_histo);
     load(Form("FR_mu_emu_%s", slot.Data()),
-         muon_dir + "MuonFR_emu_"  + slot + "_" + bcat + ".root", fr_histo);
+         muon_dir + "MuonFR_emu_"  + slot + "_" + cat + ".root", fr_histo);
 
     load(Form("PR_ele_%s", slot.Data()),
          ele_dir  + "ElePR_ee_"    + slot + ".root", "h_Ele_signal_pt_eta_bin");
