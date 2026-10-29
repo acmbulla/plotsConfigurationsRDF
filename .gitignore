@@ -222,3 +222,8 @@ Makefile
 
 # editor backups
 *.bak-*
+
+# fake-rate measurement outputs: maps and diagnostic plots, kept outside the
+# repository (latinoRDF/rootfile/FakeRateMeasured). The deployed maps that the
+# configuration actually reads live in SSWW/utils/data/FakeRate and stay here.
+SSWW/2024/FakesNum/FakeRateMeasured/
