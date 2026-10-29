@@ -542,7 +542,22 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 # The weights. Read once per job at construction, through TFile::Open when the
 # path is a .root wrapper, so xrootd reaches them from a batch node the way it
 # already reaches the b-tag and fake-rate maps.
-dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/dnn'
+#
+# They live OUTSIDE the repository, in latinoRDF/rootfile/dnn, on purpose. The
+# path is a directory on eos, and a checkout of any other branch deletes
+# anything that only this branch tracks -- which is exactly what happened:
+# switching the eos clone to FakeRate removed SSWW/utils/data/dnn and every job
+# died with "dnn_reader: cannot open ...". Outside the working tree the files do
+# not care which branch is checked out.
+#
+# The copies under SSWW/utils/data/dnn stay tracked, because they are the record
+# of which network produced a given set of plots and they are only half a
+# megabyte. After re-exporting a model, copy them across or the jobs keep
+# reading the old network:
+#
+#   cp SSWW/utils/data/dnn/*.root /eos/user/a/abulla/latinoRDF/rootfile/dnn/
+#
+dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/rootfile/dnn'
 
 ###############################################################################
 #  The inputs                                                                  #
