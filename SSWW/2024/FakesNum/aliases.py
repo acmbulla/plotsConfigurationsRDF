@@ -595,15 +595,37 @@ aliases['mt_l0'] = {
 # Three thresholds as branches and *not* as a requirement in cuts.py: the
 # region is inclusive, and requiring an away jet -- or moving its threshold --
 # is a selection applied downstream on this tree.
+#
+# FIXED: this used sqrt(pow(deta,2) + pow(dphi,2)) on RVec arguments, where
+# pow(x, 2) resolves to an integer-exponent overload that truncates the base.
+# The dR it computed was sqrt(int(deta)^2 + int(dphi)^2), i.e. 0 whenever both
+# |deta| < 1 and |dphi| < 1, so the "> 0.7" test rejected every jet inside
+# roughly dR < 1.4 instead of inside 0.7. Measured on a synthetic frame with
+# one lepton at the origin and three jets at dR = 0.50, 1.27 and 1.98:
+# the counter returned 1 where the answer is 2. It compiled, it ran, and it
+# undercounted away jets in every file produced so far. No pow() on a vector.
+#
+# The index is clamped rather than guarded. `nLepSel < 2 || <RVec>` does NOT
+# short-circuit -- ROOT::VecOps::operator|| takes a scalar and an RVec and
+# returns an RVec, so both sides are always evaluated, and SelLep_eta[1] is
+# read even when there is one lepton. The guard still gives the right answer
+# (true || x is true for every element), and RVec's small-buffer optimisation
+# means the read does not fault, but it is a read past the end returning
+# whatever the buffer last held. `[nLepSel > 1 ? 1 : 0]` costs nothing and
+# removes it.
+_dr_to = ('ROOT::VecOps::DeltaR('
+          '  CleanJet_eta,'
+          '  ROOT::VecOps::RVec<float>(CleanJet_eta.size(), SelLep_eta[%s]),'
+          '  CleanJet_phi,'
+          '  ROOT::VecOps::RVec<float>(CleanJet_phi.size(), SelLep_phi[%s]))')
 for _thr in (20, 30, 40):
     aliases['nAwayJet%d' % _thr] = {
         'expr': (
             'Sum(CleanJet_pt > %d.f && abs(CleanJet_eta) < 5.0'
-            '    && (nLepSel < 1 || sqrt(pow(CleanJet_eta - SelLep_eta[0], 2)'
-            '          + pow(ROOT::VecOps::DeltaPhi(CleanJet_phi, SelLep_phi[0]), 2)) > 0.7)'
-            '    && (nLepSel < 2 || sqrt(pow(CleanJet_eta - SelLep_eta[1], 2)'
-            '          + pow(ROOT::VecOps::DeltaPhi(CleanJet_phi, SelLep_phi[1]), 2)) > 0.7))'
-            % _thr),
+            '    && (nLepSel < 1 || %s > 0.7)'
+            '    && (nLepSel < 2 || %s > 0.7))'
+            % (_thr, _dr_to % ('0', '0'),
+               _dr_to % ('nLepSel > 1 ? 1 : 0', 'nLepSel > 1 ? 1 : 0'))),
         'samples': ALL
     }
 
