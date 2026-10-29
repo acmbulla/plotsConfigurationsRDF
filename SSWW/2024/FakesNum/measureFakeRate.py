@@ -8,7 +8,9 @@ restricted to the first nLepSel entries (SelLep = Take(Lepton, nLepSel)).
 For FR: (tight_data-tight_promptMC)/(loose_data-loose_promptMC).
 For PR: tight_data/loose_data in the DY region, without subtraction.
 All histograms use sample weights: DATA METFilter_DATA; MC XSWeight * lumi *
-METFilter_Common. If XSWeight does not include sample normalization, provide
+METFilter_Common.  Data events are assigned to one primary dataset by the same
+exclusive trigger chain the analysis uses (PD_RULES), so the trigger overlap
+between PDs is counted once. If XSWeight does not include sample normalization, provide
 proper normalization upstream before using this script.
 
 Triggers: the 1-lepton region requires the single-lepton path of the probe's
@@ -34,7 +36,9 @@ import subprocess
 import time
 import traceback
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import (FIRST_COMPLETED, ProcessPoolExecutor,
+                                ThreadPoolExecutor, as_completed, wait)
+from itertools import islice
 
 import numpy as np
 
@@ -80,10 +84,24 @@ BTAG_BRANCH = 'Jet_btagUParTAK4B'
 # the OR of both would let a 12 GeV electron into the region on an IsoMu24 that
 # fired on a muon failing lepSel, which is the same loophole the dilepton paths
 # opened, only narrower.
+# The working points the analysis actually uses (SSWW/2024/aliases.py:26-27).
+# Every WP found in the files still gets its maps; these are only the default
+# for the control plots, which otherwise fell on whichever WP sorted first --
+# alphabetical order, so effectively two arbitrary ones.
+ANALYSIS_ELE_WP = 'cutBased_MediumID_tthMVA_Run3'
+ANALYSIS_MU_WP = 'cut_TightID_pfIsoTight_HWW_tthmva_67'
+
 SINGLE_TRIGGERS = {
     'ele': ('HLT_Ele30_WPTight_Gsf',),
     'mu': ('HLT_IsoMu24',),
 }
+# Offline pT floor for the 1-lepton probe, a few GeV above each path's online
+# threshold. Without it the region keeps the turn-on: offline pT and HLT pT are
+# different measurements, so leptons below the nominal threshold do fire, but
+# with an efficiency that falls off a cliff and is not the same for tight and
+# loose -- which is exactly the ratio being measured. Above the plateau the
+# trigger divides out. Ele30 -> 32, IsoMu24 -> 26.
+SINGLE_TRIGGER_PT_MIN = {'ele': 32., 'mu': 26.}
 ALL_SINGLE = tuple(t for paths in SINGLE_TRIGGERS.values() for t in paths)
 DOUBLE_TRIGGERS = (
     'HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL',
@@ -93,6 +111,67 @@ DOUBLE_TRIGGERS = (
     'HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL',
 )
 TRIGGERS = ALL_SINGLE + DOUBLE_TRIGGERS
+# ---------------------------------------------------------------------------
+# Primary-dataset de-overlap.
+#
+# CMS writes one event into *every* primary dataset whose trigger it fired, so
+# an event passing both an e-mu path and a single-muon path physically exists
+# in the MuonEG file and in the Muon file.  The analysis assigns each event to
+# exactly one PD with the exclusive chain of SSWW/2024/samples.py:77-81, applied
+# there as a per-subsample weight.  That weight is a Define, not a Filter
+# (analysisFactory.py:583), it is not in the snapshot's variables_to_dump, and
+# this script never reads it -- so without the rule below the overlap is counted
+# once per file it appears in.  Measured on one 2024C Muon0 snapshot file:
+# 55608 of 8088778 entries (0.7%) also fire an e-mu path.
+#
+# Rebuilt from the HLT paths because the Trigger_* aliases the configuration
+# uses are not among the dumped branches.  Keys are matched against the
+# datatag, so Muon0/Muon1 and EGamma0/EGamma1 share a rule, as they do there.
+PD_GROUPS = {
+    'elmu': ('HLT_Mu23_TrkIsoVVL_Ele12_CaloIdL_TrackIdL_IsoVL',
+             'HLT_Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ',
+             'HLT_Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ'),
+    'sngmu': ('HLT_IsoMu24',),
+    'dblmu': ('HLT_Mu17_TrkIsoVVL_Mu8_TrkIsoVVL_DZ_Mass3p8',),
+    'sngel': ('HLT_Ele30_WPTight_Gsf',),
+    'dblel': ('HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL',),
+}
+# The PD priority order of samples.py: MuonEG first, then Muon, then EGamma.
+PD_ORDER = (('MuonEG', ('elmu',)),
+            ('Muon',   ('sngmu', 'dblmu')),
+            ('EGamma', ('sngel', 'dblel')))
+PD_NAMES = tuple(pd for pd, _ in PD_ORDER)
+# Which trigger groups a measurement asks for.  'elmu' is a dilepton path, so
+# it belongs to the double set.
+TRIGGER_GROUP_SETS = {
+    'all':    ('elmu', 'sngmu', 'dblmu', 'sngel', 'dblel'),
+    'double': ('elmu', 'dblmu', 'dblel'),
+    'single': ('sngmu', 'sngel'),
+}
+SINGLE_GROUP = {'ele': 'sngel', 'mu': 'sngmu'}
+
+
+def trigger_paths(active):
+    """The HLT paths of the active groups, in PD_GROUPS order."""
+    return tuple(p for g in PD_GROUPS if g in active for p in PD_GROUPS[g])
+
+
+def pd_rules(active):
+    """(keep, veto) per primary dataset, over the active groups only.
+
+    `keep` is the PD's own groups, `veto` every group an earlier PD already
+    claims -- the chain of samples.py read as sets.  Both are intersected with
+    `active`, which is what makes the partition stay exact when a trigger set
+    is dropped: with the single paths gone, Muon must no longer veto an event
+    on `sngmu`, or an ElMu+IsoMu24 event would be refused by MuonEG (which
+    does not want it either) and lost from both.
+    """
+    rules, claimed = {}, []
+    for pd, groups in PD_ORDER:
+        keep = tuple(g for g in groups if g in active)
+        rules[pd] = (keep, tuple(claimed))
+        claimed += keep
+    return rules
 BCATS = {'incl': None, 'bveto': ('zero', 20.), 'btag': ('one', 30.)}
 # Jet-multiplicity categories, as (min, max) on the number of CleanJets above
 # 20 GeV; max None means no upper bound. A second, independent axis next to
@@ -108,7 +187,12 @@ BCATS = {'incl': None, 'bveto': ('zero', 20.), 'btag': ('one', 30.)}
 JETCATS = {'incl': None, 'j0': (0, 0), 'j1': (1, 1), 'j2': (2, None),
            'j2excl': (2, 2), 'j3': (3, None)}
 JET_PT_MIN = 20.
-DEFAULT_PT = '10,15,20,25,30,35,45,65,100'
+# The legacy grid (10..50 in steps of 5 from 30, as utils/data/FakeRate holds
+# it) plus the two bins that carry it to 100 GeV. A superset, deliberately:
+# every legacy edge is an edge here, so the two productions compare bin by bin
+# where they overlap, and the 50-100 GeV range the legacy folds into its
+# overflow stays resolved instead of being clipped into 45-50.
+DEFAULT_PT = '10,15,20,25,30,35,40,45,50,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
 REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
 
@@ -133,7 +217,9 @@ GROUP_COLOURS = {
 }
 # Default control variables. pT and eta of each selected lepton is what a
 # control plot is for; the rest are available through --ctrl-var.
-DEFAULT_CTRL_VARS = ('pt', 'eta')
+# All of them. The control plots are what a presentation shows, and a variable
+# left out of the filling cannot be recovered without re-reading the snapshot.
+DEFAULT_CTRL_VARS = ('pt', 'eta', 'mll', 'met', 'mt0', 'njet')
 CTRL_VARS = {
     'pt':  (None, r'lepton $p_{T}$ [GeV]'),
     'eta': (None, r'lepton $\eta$'),
@@ -149,7 +235,11 @@ CTRL_VARS = {
 # the top CR already requires a b-tag, so crossing it with 'bveto' is empty by
 # construction and crossing it with 'btag' just repeats the region. The b
 # categories belong to the fake-rate maps, not here.
-CTRL_REGIONS = ('1l', 'dy', 'top')
+# ss_sf and ss_df are in the default set because they are where the published
+# fake-rate map comes from: leaving them out meant the one measurement nobody
+# could look at was the one the analysis applies. Drop them with --ctrl-region
+# if the extra histograms are not wanted.
+CTRL_REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
 
 
 def ctrl_bcat_for(chan, requested):
@@ -210,6 +300,23 @@ def sample_of(path):
         if suffix.startswith(s + '_'):
             return s, s in DATA_SAMPLES
     return None, None
+
+
+def pd_of(path):
+    """The primary dataset a data snapshot file came from, or None.
+
+    The file is nanoLatino_snapshot____DATA_<pd>_<run>_<i>.root, and the PD is
+    the only record of it left: the exclusive trigger weight that encodes the
+    same information upstream is not stored in the tree.  See PD_RULES.
+    """
+    name = os.path.basename(path)
+    if not name.startswith(PREFIX + 'DATA_'):
+        return None
+    tag = name[len(PREFIX) + len('DATA_'):]
+    for pd in sorted(PD_NAMES, key=len, reverse=True):
+        if tag.startswith(pd):
+            return pd
+    return None
 
 
 def pad2(arr, fill=0):
@@ -420,16 +527,36 @@ def process_file(payload):
         ak.to_numpy(a['METFilter_Common']).astype(float) * cfg['lumi'])
     # One mask per single-lepton flavour, plus the analysis OR.  See the
     # SINGLE_TRIGGERS note for why the flavours are kept apart.
-    groups = {'any': TRIGGERS}
-    groups.update((f'single_{flav}', paths)
+    active = cfg['trigger_groups']
+    groups = {'any': trigger_paths(active)}
+    # A single-lepton mask is all-False when that set is not being asked for,
+    # which empties the 1-lepton region rather than silently falling back to a
+    # dilepton path fired by something that is not the probe.
+    groups.update((f'single_{flav}',
+                   paths if SINGLE_GROUP[flav] in active else ())
                   for flav, paths in SINGLE_TRIGGERS.items())
-    fired = {}
-    for key, paths in groups.items():
+    def or_of(paths):
         mask = np.zeros(n, dtype=bool)
         for trigger in paths:
             if trigger in thave:
                 mask |= ak.to_numpy(a[trigger]).astype(bool)
-        fired[key] = mask
+        return mask
+
+    fired = {key: or_of(paths) for key, paths in groups.items()}
+    # Assign each data event to one primary dataset before any region uses it,
+    # so the trigger overlap is not counted once per file.  MC has one file per
+    # sample and needs none of this.  See PD_RULES.
+    if is_data:
+        pd = pd_of(path)
+        if pd is None:
+            return {}, [f'{os.path.basename(path)}: unrecognised primary '
+                        'dataset, skipped']
+        keep, veto = pd_rules(active)[pd]
+        pd_mask = or_of(sum((PD_GROUPS[g] for g in keep), ()))
+        for g in veto:
+            pd_mask &= ~or_of(PD_GROUPS[g])
+        for key in fired:
+            fired[key] &= pd_mask
     # Safe take for CleanJet_jetIdx == -1: such jets must not be b-tagged.
     # int64 is not optional: CleanJet_jetIdx is ULong64_t, and uint64 against
     # the int64 literal of ak.where promotes to float64 -- which awkward then
@@ -476,7 +603,11 @@ def process_file(payload):
     # separately because in '1l' it depends on the probe's flavour, and every
     # use of a region therefore goes through trig[chan][flav].
     trig = {r: {'ele': fired['any'], 'mu': fired['any']} for r in region}
-    trig['1l'] = {flav: fired[f'single_{flav}'] for flav in ('ele', 'mu')}
+    # The 1-lepton probe is slot 0 by construction, and it is the object that
+    # fired, so it also carries that path's pT floor. See SINGLE_TRIGGER_PT_MIN.
+    trig['1l'] = {flav: (fired[f'single_{flav}']
+                         & (pt[:, 0] >= cfg['pt1l'][flav]))
+                  for flav in ('ele', 'mu')}
     prompt = (pad2(a['SelLep_promptgenmatched']).astype(bool)
               if not is_data else None)
     loose = {}
@@ -521,7 +652,9 @@ def process_file(payload):
                 for moment, ww in (('sumw', w[mask]), ('sumw2', w[mask]**2)):
                     acc[('map', name, part, source, moment)] = hist2(
                         x[mask], y[mask], ww, xb, yb)
-    # Control plots: all MC components (prompt AND nonprompt), and data.
+    # Control plots: data, and the MC split into prompt and nonprompt. Only
+    # the prompt half is ever drawn (see make_plots); the nonprompt half is
+    # kept so the composition can be inspected without a second pass.
     # Loose = tight + rest, both plotted independently; inclusive in signed eta.
     # For ss/dy/top, select each lepton by its actual flavour and position.
     for wp in cfg['ctrl_wps']:
@@ -633,16 +766,75 @@ def process_file(payload):
     return acc, messages
 
 
-def ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, subtract):
+def ratio(Td, Td2, Ld, Ld2, Tm, Tm2, Lm, Lm2, subtract):
+    """tight / loose, each side subtracted with its own DY factor.
+
+    The error depends on whether anything was subtracted, because that is what
+    decides whether this is still a ratio of counts.
+
+    **Unsubtracted** (`subtract=False`): tight is a *subset* of loose, the two
+    are one binomial experiment, and the error is sqrt(f(1-f)/L) -- the
+    variance of a fraction, which goes to zero as f approaches 0 or 1 instead
+    of growing. This is the case for the published prompt rate and for
+    FR_pT_eta. The asymmetric Clopper-Pearson interval of the same experiment
+    is written next to the map as a TEfficiency (write_root); a TH2 bin error
+    is symmetric by construction and cannot carry it.
+
+    **Subtracted**: N and D are no longer counts. Each is a difference of a
+    data yield and a scaled MC one, either can go negative, and the binomial
+    does not apply -- there is no "subset" left to speak of. The two sums of
+    weights are propagated as if independent, which ignores the correlation
+    that survives the subtraction and overestimates the error where the rate
+    is large. That is deliberate and unchanged.
+    """
     N, vN = (Td - Tm, Td2 + Tm2) if subtract else (Td, Td2)
-    R, vR = (Rd - Rm, Rd2 + Rm2) if subtract else (Rd, Rd2)
-    D = N + R
+    D, vD = (Ld - Lm, Ld2 + Lm2) if subtract else (Ld, Ld2)
     f, e = np.zeros_like(D), np.zeros_like(D)
     ok = D > 0
     f[ok] = N[ok] / D[ok]
-    e[ok] = np.sqrt(np.maximum((R[ok]**2*vN[ok] + N[ok]**2*vR[ok]) /
-                                D[ok]**4, 0.))
+    if subtract:
+        e[ok] = np.sqrt(np.maximum((vN[ok]*D[ok]**2 + N[ok]**2*vD[ok]) /
+                                    D[ok]**4, 0.))
+    else:
+        e[ok] = np.sqrt(np.maximum(f[ok] * (1. - f[ok]) / D[ok], 0.))
     return f, e, ok
+
+
+def add_teff(name, passed, total, title=''):
+    """A TEfficiency for passed/total, or None when it is not one.
+
+    tight is a subset of loose, so the pair is a binomial experiment and
+    TEfficiency is the right object: it carries the Clopper-Pearson interval,
+    asymmetric and bounded in [0, 1], which a TH2 bin error cannot.
+
+    It returns None rather than raising in the three cases where the pair is
+    not a binomial experiment: a bin with more passed than total, a negative
+    bin (both of which a subtracted yield produces), or histograms ROOT itself
+    rejects. Weighted entries -- a subsampled run, where the counts are not
+    integers -- are handled by switching to the normal approximation, which is
+    what TEfficiency supports for them.
+    """
+    import ROOT
+    for ix in range(1, total.GetNbinsX() + 1):
+        for iy in range(1, total.GetNbinsY() + 1):
+            t, p = total.GetBinContent(ix, iy), passed.GetBinContent(ix, iy)
+            if t < 0 or p < 0 or p > t + 1e-9:
+                return None
+    if not ROOT.TEfficiency.CheckConsistency(passed, total):
+        return None
+    integral = all(
+        abs(total.GetBinContent(ix, iy) - round(total.GetBinContent(ix, iy))) < 1e-6
+        for ix in range(1, total.GetNbinsX() + 1)
+        for iy in range(1, total.GetNbinsY() + 1))
+    eff = ROOT.TEfficiency(passed, total)
+    eff.SetName(name)
+    eff.SetTitle(title or name)
+    if integral:
+        eff.SetStatisticOption(ROOT.TEfficiency.kFCP)      # Clopper-Pearson
+    else:
+        eff.SetUseWeightedEvents()
+        eff.SetStatisticOption(ROOT.TEfficiency.kFNormal)
+    return eff
 
 
 def write_root(path, main_name, f, e, ingredients, xb, yb):
@@ -653,6 +845,7 @@ def write_root(path, main_name, f, e, ingredients, xb, yb):
     file = ROOT.TFile.Open(path, 'RECREATE')
     if not file or file.IsZombie():
         raise RuntimeError(f'Cannot create {path}')
+    kept = {}
     for name, (values, errors) in [(main_name, (f, e))] + list(ingredients.items()):
         h = ROOT.TH2F(name, name, len(xb)-1, array('d', xb),
                       len(yb)-1, array('d', yb))
@@ -663,7 +856,130 @@ def write_root(path, main_name, f, e, ingredients, xb, yb):
                 h.SetBinContent(ix+1, iy+1, float(values[ix, iy]))
                 h.SetBinError(ix+1, iy+1, float(errors[ix, iy]))
         h.Write()
+        kept[name] = h
+    # The binomial experiment behind the unsubtracted rate. Only the data pair
+    # qualifies: after the MC subtraction neither side is a count any more.
+    # Written beside the maps, not instead of them -- fake_rate_reader*.cc
+    # reads the TH2 by name.
+    eff = add_teff('TEff_data_tight_over_loose',
+                   kept.get('h_tight_data'), kept.get('h_loose_data'),
+                   'tight / loose, data, Clopper-Pearson;p_{T} [GeV];#eta') \
+        if {'h_tight_data', 'h_loose_data'} <= set(kept) else None
+    if eff is not None:
+        eff.Write()
     file.Close()
+
+
+def write_control_root(total, cfg, base, scale_factors):
+    """Every control histogram, as ROOT, so the plots can be remade later.
+
+    One file per working point, <base>/<wp>/controlplots.root, with one
+    TDirectory per region and b-category. pT and eta are written both as the
+    2D (pT, eta) the filling keeps -- the only form a (pT, eta) scale factor
+    can reweight bin by bin -- and as its two 1D projections, which is what
+    the plots draw. The DY factors go in with them, so the file is enough on
+    its own to redo any of the shapes without re-reading the snapshot.
+
+    Histogram names are <flav>_lep<i>__<part>__<component>__<var>, where part
+    is loose or tight (loose contains tight) and component is 'data' or
+    '<sample>_prompt' / '<sample>_nonprompt'.
+    """
+    import ROOT
+    from array import array
+    ROOT.gROOT.SetBatch(True)
+    ROOT.TH1.AddDirectory(False)
+
+    def errors_of(key, values):
+        w2 = total.get(key[:-1] + ('sumw2',))
+        return np.sqrt(np.maximum(w2, 0.)) if w2 is not None else np.zeros_like(values)
+
+    def th1(name, edges, values, errors, xtitle):
+        h = ROOT.TH1D(name, f'{name};{xtitle};entries',
+                      len(edges) - 1, array('d', edges))
+        h.Sumw2()
+        for i, (v, e) in enumerate(zip(values, errors), start=1):
+            h.SetBinContent(i, float(v))
+            h.SetBinError(i, float(e))
+        return h
+
+    def th2(name, xb, yb, values, errors):
+        h = ROOT.TH2D(name, f'{name};p_{{T}} [GeV];#eta',
+                      len(xb) - 1, array('d', xb), len(yb) - 1, array('d', yb))
+        h.Sumw2()
+        for ix in range(len(xb) - 1):
+            for iy in range(len(yb) - 1):
+                h.SetBinContent(ix + 1, iy + 1, float(values[ix, iy]))
+                h.SetBinError(ix + 1, iy + 1, float(errors[ix, iy]))
+        return h
+
+    nfiles = nhist = 0
+    for wp in cfg['ctrl_wps']:
+        folders = defaultdict(list)
+        for key, values in total.items():
+            if key[0] not in ('plot', 'plot2') or key[1] != wp or key[-1] != 'sumw':
+                continue
+            if key[0] == 'plot2':
+                _, _, chan, bcat, flav, i, part, comp, _ = key
+            else:
+                _, _, chan, bcat, flav, i, var, part, comp, _ = key
+            stem = f'{flav}_lep{i}__{part}__{comp}'
+            errors = errors_of(key, values)
+            xb, yb = cfg['bins'][flav]
+            if key[0] == 'plot2':
+                folders[f'{chan}_{bcat}'] += [
+                    th2(f'{stem}__pt_eta', xb, yb, values, errors),
+                    # projections of the same 2D, so they can never disagree
+                    th1(f'{stem}__pt', xb, values.sum(axis=1),
+                        np.sqrt((errors ** 2).sum(axis=1)), 'p_{T} [GeV]'),
+                    th1(f'{stem}__eta', yb, values.sum(axis=0),
+                        np.sqrt((errors ** 2).sum(axis=0)), '#eta'),
+                ]
+            else:
+                folders[f'{chan}_{bcat}'].append(
+                    th1(f'{stem}__{var}', ctrl_binning(var, flav, cfg),
+                        values, errors, CTRL_VARS[var][1]))
+        # tight / loose per region and component, as the binomial experiment
+        # it is. Nothing here is subtracted, so every component qualifies; a
+        # weighted one falls back to the normal approximation inside add_teff.
+        for folder in list(folders):
+            if folder == 'scalefactors':
+                continue
+            hists = {h.GetName(): h for h in folders[folder]}
+            for name in sorted(hists):
+                # <flav>_lep<i>__loose__<component>__pt_eta -- the part comes
+                # before the component, so match on both ends.
+                if '__loose__' not in name or not name.endswith('__pt_eta'):
+                    continue
+                tight = hists.get(name.replace('__loose__', '__tight__'))
+                if tight is None:
+                    continue
+                stem = name[:-len('__pt_eta')].replace('__loose__', '__')
+                eff = add_teff(f'{stem}__eff_pt_eta', tight, hists[name],
+                               f'{stem} tight / loose;p_{{T}} [GeV];#eta')
+                if eff is not None:
+                    folders[folder].append(eff)
+        for (w, flav, i, part), (sf, err) in scale_factors.items():
+            if w != wp:
+                continue
+            xb, yb = cfg['bins'][flav]
+            folders['scalefactors'].append(
+                th2(f'{flav}_lep{i}__{part}', xb, yb, sf, err))
+        if not folders:
+            continue
+        path = os.path.join(base, wp, 'controlplots.root')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fh = ROOT.TFile.Open(path, 'RECREATE')
+        if not fh or fh.IsZombie():
+            raise RuntimeError(f'Cannot create {path}')
+        for folder, hists in sorted(folders.items()):
+            d = fh.mkdir(folder)
+            d.cd()
+            for h in hists:
+                h.Write()
+                nhist += 1
+        fh.Close()
+        nfiles += 1
+    return nfiles, nhist
 
 
 def group_of(sample):
@@ -675,16 +991,25 @@ def group_of(sample):
 
 
 def compute_sf(total, cfg):
-    """Data over MC in the DY CR, in (pT, eta), per WP, flavour, lepton slot
-    and selection level.
+    """Data over MC in the DY CR, per WP, flavour, lepton slot and selection
+    level.
 
     Returns {(wp, flav, i, part): (sf, err)} for part in tight / rest / loose.
-    'rest' is loose-but-not-tight, the denominator ingredient the subtraction
-    actually uses; 'loose' is tight + rest, which is what one looks at.
+    The maps use 'tight' and 'loose' -- the numerator and the denominator of
+    the rate. 'rest' is loose-but-not-tight; it is still computed, because it
+    costs nothing, but nothing subtracts with it any more.
 
-    A bin where either side is empty is left at 1 and counted. No MC means
-    there is nothing to correct; no data means the ratio is not measured, and
-    taking it as 0 would silently delete that MC instead of saying so.
+    By default the factor is a single number per key -- the ratio of the two
+    integrals over the whole (pT, eta) plane -- broadcast to the map shape so
+    that everything downstream keeps multiplying arrays. The point of this
+    correction is the normalization of the DY MC, and measuring it per bin
+    gave every bin its own statistical error, which the subtraction then
+    carried into the fake rate. --sf-binned restores the per-bin factors.
+
+    Integral mode leaves the factor at 1 only when a whole side is empty.
+    Per-bin mode leaves such bins at 1 and counts them: no MC means there is
+    nothing to correct; no data means the ratio is not measured, and taking it
+    as 0 would silently delete that MC instead of saying so.
     """
     out, empty = {}, defaultdict(int)
     for wp in cfg['all_wps']:
@@ -711,12 +1036,25 @@ def compute_sf(total, cfg):
                                    tmw + rmw, tmw2 + rmw2))):
                     sf = np.ones(shape)
                     err = np.zeros(shape)
-                    ok = (mw > 0) & (dw > 0)
-                    sf[ok] = dw[ok] / mw[ok]
-                    # ratio of two independent sums of weights
-                    err[ok] = sf[ok] * np.sqrt(dw2[ok] / dw[ok] ** 2
-                                               + mw2[ok] / mw[ok] ** 2)
-                    empty[(wp, flav, i, part)] = int((~ok).sum())
+                    if cfg.get('sf_binned', False):
+                        ok = (mw > 0) & (dw > 0)
+                        sf[ok] = dw[ok] / mw[ok]
+                        # ratio of two independent sums of weights
+                        err[ok] = sf[ok] * np.sqrt(dw2[ok] / dw[ok] ** 2
+                                                   + mw2[ok] / mw[ok] ** 2)
+                        empty[(wp, flav, i, part)] = int((~ok).sum())
+                    else:
+                        D, D2 = dw.sum(), dw2.sum()
+                        M, M2 = mw.sum(), mw2.sum()
+                        if M > 0 and D > 0:
+                            value = D / M
+                            sf[:] = value
+                            err[:] = value * np.sqrt(D2 / D ** 2 + M2 / M ** 2)
+                            empty[(wp, flav, i, part)] = 0
+                        else:
+                            # nothing measured: stay at 1 and say so, rather
+                            # than scale the MC by a number nobody computed
+                            empty[(wp, flav, i, part)] = int(sf.size)
                     out[(wp, flav, i, part)] = (sf, err)
     return out, empty
 
@@ -783,10 +1121,15 @@ def report_sf(scale_factors, empty, wps):
         wp, flav, i, part = key
         if wp not in wps or part == 'rest':
             continue
-        sf = scale_factors[key][0]
+        sf, err = scale_factors[key]
         measured = sf[sf != 1.]
         if not measured.size:
             lines.append(f'  {flav} lep{i + 1} {part:5s}: nothing measured')
+            continue
+        if measured.min() == measured.max():
+            # integral factor: one number, so report it as one number
+            lines.append(f'  {flav} lep{i + 1} {part:5s}: '
+                         f'{measured[0]:.4f} +- {err.flat[0]:.4f} (integral)')
             continue
         lines.append(
             f'  {flav} lep{i + 1} {part:5s}: median {np.median(measured):.3f}, '
@@ -890,9 +1233,15 @@ def make_plots(total, cfg, base, scale_factors, empty_bins):
                             if twod and key in scale_factors:
                                 passes.append(('_sf', scale_factors[key][0]))
                             for suffix, sfmap in passes:
-                                # prompt and nonprompt are summed back together:
-                                # the split is for the fake-rate maps, a control
-                                # plot wants the processes a reader recognises
+                                # PROMPT ONLY. The control plot has to show
+                                # the same MC the map subtracts, and the map
+                                # subtracts the genmatched prompt alone. Adding
+                                # the nonprompt back -- which this did, folded
+                                # invisibly into each process's own slice --
+                                # put MC fakes under the data in a plot whose
+                                # whole point is the excess of fakes over the
+                                # prompt prediction. The nonprompt series stays
+                                # in the accumulator; nothing draws it.
                                 stack = []
                                 for group in MC_GROUPS:
                                     y = np.zeros(len(edges) - 1)
@@ -900,12 +1249,10 @@ def make_plots(total, cfg, base, scale_factors, empty_bins):
                                     for sample in MC_SAMPLES:
                                         if group_of(sample) != group:
                                             continue
-                                        for origin in ('prompt', 'nonprompt'):
-                                            label = f'{sample}_{origin}'
-                                            y = y + grab(label, part, 'sumw',
-                                                         sfmap)
-                                            y2 = y2 + grab(label, part, 'sumw2',
-                                                           sfmap)
+                                        label = f'{sample}_prompt'
+                                        y = y + grab(label, part, 'sumw', sfmap)
+                                        y2 = y2 + grab(label, part, 'sumw2',
+                                                       sfmap)
                                     if np.any(y):
                                         stack.append((group, y, y2))
                                 if not np.any(data) and not stack:
@@ -944,22 +1291,20 @@ def one_control_plot(plt, edges, data, data2, stack, xlabel, lumi, header, wp):
     centers = (edges[:-1] + edges[1:]) / 2
     total_mc = np.zeros(len(width))
     total_mc2 = np.zeros(len(width))
-    # Stacking signed MC is not meaningful if a component goes negative, which
-    # a subsampled or badly normalised set can do: fall back to outlines.
-    can_stack = all(np.all(y >= 0) for _, y, _ in stack)
+    # Always stacked and filled, negatives included: a bar with a negative
+    # height is drawn downwards from the running bottom, so the top of the
+    # stack still sits at the real sum. Generator weights are signed and a
+    # thin bin can come out below zero; that is a fact about the sample, and
+    # it is more useful seen than hidden behind an outline.
     bottom = np.zeros(len(width))
     for label, y, y2 in stack:
-        if can_stack:
-            ax.bar(edges[:-1], y, width=width, bottom=bottom, align='edge',
-                   color=GROUP_COLOURS.get(label, '#9e9e9e'),
-                   edgecolor='black', linewidth=.4, label=label)
-            bottom = bottom + y
-        else:
-            ax.stairs(y, edges, label=label,
-                      color=GROUP_COLOURS.get(label, '#9e9e9e'))
+        ax.bar(edges[:-1], y, width=width, bottom=bottom, align='edge',
+               color=GROUP_COLOURS.get(label, '#9e9e9e'),
+               edgecolor='black', linewidth=.4, label=label)
+        bottom = bottom + y
         total_mc = total_mc + y
         total_mc2 = total_mc2 + y2
-    if stack and can_stack:
+    if stack:
         ax.bar(edges[:-1], 2 * np.sqrt(total_mc2), width=width,
                bottom=total_mc - np.sqrt(total_mc2), align='edge',
                facecolor='none', edgecolor='black', hatch='/////',
@@ -979,8 +1324,11 @@ def one_control_plot(plt, edges, data, data2, stack, xlabel, lumi, header, wp):
         ax.set_xlim(edges[0], edges[-1])
     top = max(data.max() if len(data) else 0.,
               total_mc.max() if len(total_mc) else 0.)
+    # The floor follows the stack when it dips below zero, so a negative bin
+    # is visible instead of being clipped off the bottom of the axis.
+    low = min(0., float(np.min(total_mc)) if len(total_mc) else 0.)
     if top > 0:
-        ax.set_ylim(0., 1.5 * top)
+        ax.set_ylim(1.2 * low if low < 0 else 0., 1.5 * top)
     ax.legend(fontsize=8, ncol=3, loc='upper right', framealpha=.9)
     ax.grid(alpha=.15)
     ax.text(0., 1.012, 'CMS', transform=ax.transAxes, fontweight='bold',
@@ -1049,6 +1397,10 @@ def dump_partial(path, acc, problems, cfg, files):
     a different binning is caught instead of being summed into the rest.
     """
     import pickle
+    # The submit path creates condor/parts up front, but a --dump run started
+    # by hand has no reason to have it, and finding that out only here throws
+    # away the whole event loop that just finished.
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     tmp = path + '.tmp'
     with open(tmp, 'wb') as fh:
         pickle.dump({'acc': acc, 'problems': problems, 'cfg': cfg,
@@ -1314,13 +1666,25 @@ def main():
     ap.add_argument('--top-min-btags', type=int, default=1)
     ap.add_argument('--ctrl-wp', action='append', default=[],
                     help='working points to make control plots for. Default: '
-                         'the first electron and muon WP. The maps are always '
-                         'made for every WP; this only bounds the plots, which '
-                         'cost one set of histograms per WP')
+                         'the two the analysis uses (%s, %s). The maps are '
+                         'always made for every WP; this only bounds the '
+                         'plots, which cost one set of histograms per WP'
+                         % (ANALYSIS_ELE_WP, ANALYSIS_MU_WP))
+    ap.add_argument('--triggers', choices=sorted(TRIGGER_GROUP_SETS),
+                    default='all',
+                    help='which trigger set the 2-lepton regions ask for. '
+                         '"double" drops the single-lepton paths, so no probe '
+                         'is ever the object that fired a tight HLT selection; '
+                         'it also drops the 1-lepton region, which has no '
+                         'coherent trigger without them (default: all)')
     ap.add_argument('--ctrl-region', action='append', choices=list(REGIONS),
                     default=[],
                     help=f'regions to make control plots for '
                          f'(default: {" ".join(CTRL_REGIONS)})')
+    ap.add_argument('--sf-binned', action='store_true',
+                    help='measure the DY data/MC factor per (pT, eta) bin '
+                         'instead of as one integral number per WP, flavour, '
+                         'lepton slot and selection level')
     ap.add_argument('--sf-bcat', choices=sorted(BCATS), default='incl',
                     help='b-category the DY scale factors are derived in')
     ap.add_argument('--ctrl-bcat', choices=sorted(BCATS), default='incl',
@@ -1331,6 +1695,16 @@ def main():
                     default=[],
                     help=f'control-plot variables '
                          f'(default: {" ".join(DEFAULT_CTRL_VARS)})')
+    ap.add_argument('--pt-min-1l-ele', type=float,
+                    default=SINGLE_TRIGGER_PT_MIN['ele'],
+                    help='offline pT floor of the 1-lepton electron probe, '
+                         'above the HLT_Ele30 turn-on '
+                         f'(default: {SINGLE_TRIGGER_PT_MIN["ele"]:g})')
+    ap.add_argument('--pt-min-1l-mu', type=float,
+                    default=SINGLE_TRIGGER_PT_MIN['mu'],
+                    help='offline pT floor of the 1-lepton muon probe, above '
+                         'the HLT_IsoMu24 turn-on '
+                         f'(default: {SINGLE_TRIGGER_PT_MIN["mu"]:g})')
     ap.add_argument('--no-plots', action='store_true')
     ap.add_argument('--submitBatch', action='store_true',
                     help='split the files into HTCondor jobs and submit them')
@@ -1417,34 +1791,85 @@ def main():
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
             'mu': (args.pt_bins, args.eta_bins_mu)}
     maps = map_definitions(ele_wps, mu_wps, bcats, jetcats)
-    ctrl_wps = args.ctrl_wp or ele_wps[:1] + mu_wps[:1]
+    # Without the single-lepton paths the 1-lepton region cannot be triggered
+    # on its probe, so drop it from the maps and the control plots instead of
+    # producing empty ones.
+    active_groups = TRIGGER_GROUP_SETS[args.triggers]
+    singles_on = any(g in active_groups for g in SINGLE_GROUP.values())
+    ctrl_regions = args.ctrl_region or list(CTRL_REGIONS)
+    if not singles_on:
+        dropped = len(maps)
+        maps = [m for m in maps if m[4] != '1l']
+        ctrl_regions = [r for r in ctrl_regions if r != '1l']
+        print(f'Triggers {args.triggers}: 1-lepton region dropped '
+              f'({dropped - len(maps)} maps)', flush=True)
+    if args.ctrl_wp:
+        ctrl_wps = args.ctrl_wp
+    else:
+        ctrl_wps = [w for w in (ANALYSIS_ELE_WP, ANALYSIS_MU_WP)
+                    if w in set(ele_wps + mu_wps)]
+        absent = [w for w in (ANALYSIS_ELE_WP, ANALYSIS_MU_WP)
+                  if w not in set(ele_wps + mu_wps)]
+        if absent:
+            print(f'WARNING: analysis working point(s) {absent} not in '
+                  'these files; the control plots fall back to the first WP '
+                  'found', flush=True)
+            ctrl_wps = ctrl_wps or ele_wps[:1] + mu_wps[:1]
     unknown_ctrl = [w for w in ctrl_wps if w not in set(ele_wps + mu_wps)]
     if unknown_ctrl:
         ap.error(f'--ctrl-wp not among the measured working points: '
                  f'{unknown_ctrl}')
     cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
-               ctrl_regions=args.ctrl_region or list(CTRL_REGIONS),
+               ctrl_regions=ctrl_regions,
+               trigger_groups=active_groups,
                ctrl_vars=args.ctrl_var or list(DEFAULT_CTRL_VARS),
+               pt1l={'ele': args.pt_min_1l_ele, 'mu': args.pt_min_1l_mu},
                ctrl_bcat=args.ctrl_bcat, sf_bcat=args.sf_bcat,
+               sf_binned=args.sf_binned,
                all_wps=sorted(set(ele_wps + mu_wps)), bcats=bcats,
                jetcats=jetcats, bins=bins,
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
                loose_mu=args.loose_mu, btag_thr=BTAG_WPS[args.btag_wp],
                retries=args.retries, top_met_min=args.top_met_min,
                top_mll_min=args.top_mll_min, top_min_btags=args.top_min_btags)
-    print(f'Control plots: regions {args.ctrl_region or list(CTRL_REGIONS)}, '
+    # Fail in the first second, not after the event loop: --dump writes its one
+    # output as the very last thing main() does, so an unwritable path there
+    # costs the whole run. Touch it now instead.
+    if args.dump:
+        probe = args.dump + '.probe'
+        try:
+            os.makedirs(os.path.dirname(args.dump) or '.', exist_ok=True)
+            with open(probe, 'wb'):
+                pass
+            os.remove(probe)
+        except OSError as exc:
+            raise SystemExit(f'--dump {args.dump} is not writable: {exc}')
+    print(f'Control plots: regions {ctrl_regions}, '
           f'variables {args.ctrl_var or list(DEFAULT_CTRL_VARS)}, '
           f'b-category {args.ctrl_bcat}, WPs {ctrl_wps}', flush=True)
-    print('Triggers: 1l requires the single-lepton path of the probe flavour '
-          f'({", ".join(f"{k}: {v[0]}" for k, v in SINGLE_TRIGGERS.items())}); '
-          f'2l regions the full analysis OR of {len(TRIGGERS)} paths',
+    print(f'1-lepton probe pT floor: ele {args.pt_min_1l_ele:g}, '
+          f'mu {args.pt_min_1l_mu:g} GeV', flush=True)
+    print('DY data/MC factor: '
+          + ('per (pT, eta) bin' if args.sf_binned else
+             'one integral number per WP, flavour, lepton slot and level'),
+          flush=True)
+    print(f'Triggers: set "{args.triggers}" -- '
+          f'{len(trigger_paths(active_groups))} paths '
+          f'({", ".join(active_groups)}); '
+          + ('1l requires the single-lepton path of the probe flavour '
+             f'({", ".join(f"{k}: {v[0]}" for k, v in SINGLE_TRIGGERS.items())})'
+             if singles_on else '1l region off'),
           flush=True)
     print(f'Categories: b {bcats}; jets {jetcats} '
           f'(on CleanJet above {JET_PT_MIN:g} GeV)', flush=True)
     print(f'Files: {len(files)}; maps: {len(maps)}; lumi: {args.lumi}; '
-          f'eta signed: {args.eta_bins_ele}; top CR: OS e-mu, '
-          f'MET>{args.top_met_min}, mll>{args.top_mll_min}, '
-          f'nbtag>={args.top_min_btags}', flush=True)
+          f'eta signed: {args.eta_bins_ele}', flush=True)
+    # Only when it is actually being made: the top CR is a control plot and
+    # nothing else, so announcing it on a run that excluded it is a lie.
+    if 'top' in cfg['ctrl_regions']:
+        print(f'top CR (control plots only, defined here and not in cuts.py): '
+              f'OS e-mu, MET>{args.top_met_min}, mll>{args.top_mll_min}, '
+              f'nbtag>={args.top_min_btags}', flush=True)
     total = {}
     problems = []
     if args.file_list:
@@ -1503,6 +1928,11 @@ def main():
         # The jobs' configuration wins: the histograms were filled with it, and
         # re-deriving it here would mean repeating every option on the merge.
         cfg.update(job_cfg)
+        # ... except this one: the DY factors are derived here, from the
+        # summed accumulator, so --sf-binned is a merge-time decision and the
+        # jobs have no opinion on it. Without this, the flag would be read
+        # back from whatever the jobs happened to record.
+        cfg['sf_binned'] = args.sf_binned
         ele_wps, mu_wps = cfg['ele_wps'], cfg['mu_wps']
         bcats, bins, maps = cfg['bcats'], cfg['bins'], cfg['maps']
         # Parts dumped before the jet axis existed carry 7-field maps and no
@@ -1519,16 +1949,48 @@ def main():
                   f'this merge: {" ".join(missing[:20])}'
                   f'{" ..." if len(missing) > 20 else ""}')
     elif args.workers > 1:
+        # Bounded in-flight window, and no reference kept to a task once it
+        # has been merged.
+        #
+        # Submitting every payload up front and iterating as_completed over
+        # the dict that holds them leaks: a Future keeps its result alive
+        # until the Future itself is freed, and the dict kept every Future
+        # for the whole run. So the parent held one full per-file
+        # accumulator -- a few hundred numpy arrays -- for every file it had
+        # already merged. On 1294 files that grows until the machine runs
+        # out and the OOM killer takes a worker, which surfaces as
+        # BrokenProcessPool on the next result() rather than as a memory
+        # error.
+        #
+        # Here at most `window` tasks exist at a time, each is popped before
+        # it is merged, and its accumulator is dropped straight after. The
+        # window is wider than the pool so no worker ever waits for the
+        # parent to come back round.
+        window = 2 * args.workers
+        pending, done = {}, 0
+        queue = iter(payloads)
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(process_file, payload): payload[0]
-                       for payload in payloads}
-            for i, future in enumerate(as_completed(futures), 1):
-                try:
-                    merge(*future.result())
-                except Exception:
-                    problems.append(f'{futures[future]}: {traceback.format_exc(limit=2)}')
-                if i % 50 == 0:
-                    print(f'Processed {i}/{len(files)}', flush=True)
+            for payload in islice(queue, window):
+                pending[pool.submit(process_file, payload)] = payload[0]
+            while pending:
+                finished, _ = wait(list(pending),
+                                   return_when=FIRST_COMPLETED)
+                for future in finished:
+                    name = pending.pop(future)
+                    try:
+                        acc, msgs = future.result()
+                        merge(acc, msgs)
+                        del acc, msgs
+                    except Exception:
+                        problems.append(
+                            f'{name}: {traceback.format_exc(limit=2)}')
+                    done += 1
+                    if done % 50 == 0:
+                        print(f'Processed {done}/{len(files)}', flush=True)
+                    del future
+                finished.clear()
+                for payload in islice(queue, window - len(pending)):
+                    pending[pool.submit(process_file, payload)] = payload[0]
     else:
         for i, payload in enumerate(payloads, 1):
             try:
@@ -1570,14 +2032,19 @@ def main():
         Rm, Rm2 = grab(name, 'rest', source, 'sumw', flav), grab(name, 'rest', source, 'sumw2', flav)
         if not np.any(Td + Rd):
             continue
+        # loose = tight + rest. The rate is tight / loose, so loose is
+        # assembled here and subtracted in one piece with its own DY factor,
+        # instead of the two subsets each carrying a factor of its own.
+        Ld, Ld2 = Td + Rd, Td2 + Rd2
+        Lm, Lm2 = Tm + Rm, Tm2 + Rm2
         # The DY factors reweight the subtracted MC, each level by its own map.
         sf_t = scale_factors.get((wp, flav, i, 'tight'), (np.ones_like(Tm),))[0]
-        sf_r = scale_factors.get((wp, flav, i, 'rest'), (np.ones_like(Rm),))[0]
-        raw, raw_e, ok = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, False)
-        ewk, ewk_e, _ = ratio(Td, Td2, Rd, Rd2, Tm, Tm2, Rm, Rm2, True)
-        corr, corr_e, _ = ratio(Td, Td2, Rd, Rd2,
+        sf_l = scale_factors.get((wp, flav, i, 'loose'), (np.ones_like(Lm),))[0]
+        raw, raw_e, ok = ratio(Td, Td2, Ld, Ld2, Tm, Tm2, Lm, Lm2, False)
+        ewk, ewk_e, _ = ratio(Td, Td2, Ld, Ld2, Tm, Tm2, Lm, Lm2, True)
+        corr, corr_e, _ = ratio(Td, Td2, Ld, Ld2,
                                 Tm * sf_t, Tm2 * sf_t ** 2,
-                                Rm * sf_r, Rm2 * sf_r ** 2, True)
+                                Lm * sf_l, Lm2 * sf_l ** 2, True)
         # The fake rate is published subtracted and reweighted. The prompt
         # rate is NOT: it stays the plain tight / (tight + rest) ratio of the
         # data, which is what it is defined as. The subtracted variants are
@@ -1589,10 +2056,12 @@ def main():
                        f'{tag}_pT_eta_EWKcorr': (corr, corr_e),
                        'h_tight_data': (Td, np.sqrt(Td2)),
                        'h_rest_data': (Rd, np.sqrt(Rd2)),
+                       'h_loose_data': (Ld, np.sqrt(Ld2)),
                        'h_tight_mc': (Tm, np.sqrt(Tm2)),
                        'h_rest_mc': (Rm, np.sqrt(Rm2)),
+                       'h_loose_mc': (Lm, np.sqrt(Lm2)),
                        'h_tight_mc_SF': (Tm * sf_t, np.sqrt(Tm2) * sf_t),
-                       'h_rest_mc_SF': (Rm * sf_r, np.sqrt(Rm2) * sf_r)}
+                       'h_loose_mc_SF': (Lm * sf_l, np.sqrt(Lm2) * sf_l)}
         if kind == 'FR':
             hist_name = 'FR_pT_eta_EWKcorr'
         else:
@@ -1622,6 +2091,9 @@ def main():
     print(f'Wrote {written} ROOT maps in {base}')
     for line in compare_variants(comparisons):
         print(line)
+    nfiles, nhist = write_control_root(total, cfg, base, scale_factors)
+    print(f'Wrote {nhist} control objects (histograms and TEfficiency) '
+          f'in {nfiles} controlplots.root')
     if not args.no_plots:
         nplots = make_plots(total, cfg, os.path.join(base, 'plots'),
                             scale_factors, empty_bins)

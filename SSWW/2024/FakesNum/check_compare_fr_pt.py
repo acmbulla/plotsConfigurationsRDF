@@ -25,12 +25,12 @@ def main():
     # histogram contents as densities must both give a different answer.
     pt=np.array([10.,20.,40.,80.]);eta=np.array([-2.5,-.8,0.,2.5])
     c=Counts(pt[:2],eta[:3],np.array([[1.,9.]]),np.array([[1.,9.]]),
-             np.array([[99.,1.]]),np.array([[99.,1.]]))
+             np.array([[100.,10.]]),np.array([[100.,10.]]))
     result=project_pt([c]);assert np.isclose(result['rate'][0],10/110)
     assert not np.isclose(result['rate'][0],np.mean([.01,.9]))
-    bad=Counts(pt[:2],eta[:2],np.array([[-1.]]),np.array([[2.]]),np.array([[0.]]),np.array([[1.]]))
+    bad=Counts(pt[:2],eta[:2],np.array([[-1.]]),np.array([[2.]]),np.array([[-1.]]),np.array([[3.]]))
     assert not project_pt([bad])['valid'][0] and np.isnan(project_pt([bad])['rate'][0])
-    negative=Counts(pt[:2],eta[:2],np.array([[-1.]]),np.array([[2.]]),np.array([[3.]]),np.array([[3.]]))
+    negative=Counts(pt[:2],eta[:2],np.array([[-1.]]),np.array([[2.]]),np.array([[2.]]),np.array([[5.]]))
     assert project_pt([negative])['valid'][0] and project_pt([negative])['rate'][0]==-.5
     with tempfile.TemporaryDirectory(prefix='check_fr_pt_') as temporary:
         base=Path(temporary);inputs=base/'maps';out=base/'plots';reference={}
@@ -61,15 +61,21 @@ def main():
                     rd=np.array([[99.,1.,6.],[2.,99.,7.],[8.,2.,4.]])*(1+index%2)*rs
                     tm=np.ones_like(td)*ts;rm=np.ones_like(rd)*rs
                     vt=td.copy();vr=rd.copy();vtm=tm*1.5;vrm=rm*1.5
-                    sf_t=np.array([.5,2.,1.5]);sf_r=np.array([1.2,.7,2.])
+                    # Distinct tight and loose factors, so a run that mixed
+                    # them up could not pass: the rate is tight/loose and the
+                    # two levels are subtracted with factors of their own.
+                    sf_t=np.array([.5,2.,1.5]);sf_l=np.array([1.2,.7,2.])
+                    ld=td+rd;lm=tm+rm;vl=vt+vr;vlm=vtm+vrm
                     values={'h_tight_data':(td,vt),'h_rest_data':(rd,vr),
+                            'h_loose_data':(ld,vl),
                             'h_tight_mc':(tm,vtm),'h_rest_mc':(rm,vrm),
+                            'h_loose_mc':(lm,vlm),
                             'h_tight_mc_SF':(tm*sf_t,vtm*sf_t**2),
-                            'h_rest_mc_SF':(rm*sf_r,vrm*sf_r**2)}
+                            'h_loose_mc_SF':(lm*sf_l,vlm*sf_l**2)}
                     with uproot.recreate(folder/name) as root:
                         for key,(v,var) in values.items():root[key]=write_hist(v,var,pt,eta)
-                    reference[wp,flavor,name,'corrected']=(td-tm*sf_t,vt+vtm*sf_t**2,rd-rm*sf_r,vr+vrm*sf_r**2)
-                    reference[wp,flavor,name,'ewk']=(td-tm,vt+vtm,rd-rm,vr+vrm)
+                    reference[wp,flavor,name,'corrected']=(td-tm*sf_t,vt+vtm*sf_t**2,ld-lm*sf_l,vl+vlm*sf_l**2)
+                    reference[wp,flavor,name,'ewk']=(td-tm,vt+vtm,ld-lm,vl+vlm)
         script=Path(__file__).with_name('compare_fr_pt.py')
         done=subprocess.run([sys.executable,str(script),'--input',str(inputs),'--out',str(out)],
                             text=True,capture_output=True)
@@ -82,8 +88,8 @@ def main():
                     for case in ['1l','2l_lep0','2l_lep1']:
                         for cat in ['incl','btag','bveto']:
                             names=needed_names(flavor,case,cat,['sf','df'])
-                            n,vn,r,vr=[sum(reference[wp,flavor,name,variant][i].sum(axis=1) for name in names) for i in range(4)]
-                            expected=n/(n+r);err=np.sqrt((r*r*vn+n*n*vr)/(n+r)**4)
+                            n,vn,l,vl=[sum(reference[wp,flavor,name,variant][i].sum(axis=1) for name in names) for i in range(4)]
+                            expected=n/l;err=np.sqrt((vn*l*l+n*n*vl)/l**4)
                             np.testing.assert_allclose(curves[f'{case}/{cat}']['rate'],expected)
                             np.testing.assert_allclose(curves[f'{case}/{cat}']['error'],err)
         example=out/'2024/WP_A/ele'
@@ -143,12 +149,12 @@ def main():
         assert [band[2:4] for band in bands]==[(0.,.8),(.8,2.5)]
         assert prompt['lep0/eta0']['eta_band']==[0.,.8] and prompt['lep1/eta1']['eta_band']==[.8,2.5]
         for slot in (0,1):
-            T,VT,R,VR=reference['WP_A','ele',f'ElePR_ee_lep{slot}.root','ewk']
+            T,VT,L,VL=reference['WP_A','ele',f'ElePR_ee_lep{slot}.root','ewk']
             for index,(_,_,_,_,mask) in enumerate(bands):
-                n,vn,r,vr=[part[:,mask].sum(axis=1) for part in (T,VT,R,VR)]
-                np.testing.assert_allclose(prompt[f'lep{slot}/eta{index}']['rate'],n/(n+r))
+                n,vn,l,vl=[part[:,mask].sum(axis=1) for part in (T,VT,L,VL)]
+                np.testing.assert_allclose(prompt[f'lep{slot}/eta{index}']['rate'],n/l)
                 np.testing.assert_allclose(prompt[f'lep{slot}/eta{index}']['error'],
-                                           np.sqrt((r*r*vn+n*n*vr)/(n+r)**4))
+                                           np.sqrt((vn*l*l+n*n*vl)/l**4))
             raw=prompt[f'lep{slot}_raw/eta0']['rate']
             assert not np.allclose(raw,prompt[f'lep{slot}/eta0']['rate'])
         # A WP with no legacy maps is reported, never fatal.
@@ -162,7 +168,7 @@ def main():
         unweighted=base/'unweighted.root'
         with uproot.recreate(unweighted) as root:
             root['h_tight_data']=(np.ones((3,3)),pt,eta)
-            root['h_rest_data']=(np.ones((3,3)),pt,eta)
+            root['h_loose_data']=(np.ones((3,3)),pt,eta)
         try:read_counts(str(unweighted),'raw')
         except ValueError as exc:assert 'Sumw2' in str(exc)
         else:raise AssertionError('unweighted errors silently accepted')

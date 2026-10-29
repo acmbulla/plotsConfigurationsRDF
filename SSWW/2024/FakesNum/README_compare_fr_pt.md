@@ -115,7 +115,7 @@ Tre differenze di contenuto da tenere presenti leggendo le figure:
   si integra con `FR = Σ num / Σ den` e si propaga
   `Var(FR) = Σ (den_j/Σden)² Var(rate_j)`, cioe con i denominatori trattati
   come pesi fissi. Non e la stessa formula usata per le mappe nuove, dove i
-  conteggi tight/rest hanno le loro varianze.
+  conteggi tight/loose hanno le loro varianze.
 - **Varianti.** La produzione vecchia ha una sola versione sottratta, quindi
   `EWK` ed `EWKcorr` leggono lo stesso `FR_pT_eta_EWKcorr`; `raw` legge
   `FR_pT_eta`. Il PR vecchio non ha varianti del tutto.
@@ -142,25 +142,36 @@ manifest.
   Il default è UParTAK4B loose, soglia 0.0246, con |eta| < 2.5; è modificabile
   in produzione con `--btag-wp` (medium 0.1272, tight 0.4648). Il compare non
   applica una nuova WP: legge quella delle mappe prodotte.
-- EWK usa `h_tight_data`, `h_rest_data`, `h_tight_mc`, `h_rest_mc`.
-- EWKcorr usa gli stessi dati e `h_tight_mc_SF`, `h_rest_mc_SF`: i fattori
-  DY del producer sono già applicati per bin2D. Le due versioni non vengono
+- EWK usa `h_tight_data`, `h_loose_data`, `h_tight_mc`, `h_loose_mc`.
+- EWKcorr usa gli stessi dati e `h_tight_mc_SF`, `h_loose_mc_SF`: i fattori
+  DY del producer sono già applicati. Le due versioni non vengono
   sovrapposte nello stesso grafico e non si sovrascrivono.
+- `loose` è il livello completo, cioè tight + rest, ed è il denominatore del
+  rate. Il producer scrive ancora `h_rest_data` e `h_rest_mc`, ma il compare
+  non li legge più. **I ROOT prodotti prima di questo cambiamento non hanno
+  gli istogrammi `h_loose_*` e il compare non li può leggere.**
 - Si sommano **contenuti e varianze** nelle eta visibili, poi nei canali SF/DF
   disgiunti. Non si media la mappa FR e non si moltiplicano i conteggi per la
   larghezza dei bin eta. I dati pT oltre gli estremi seguono il folding già
   effettuato dal producer.
 
-Con `T = tight_data − tight_promptMC` e
-`R = rest_data − rest_promptMC`, dopo l'integrazione:
+Con `T = tight_data − tight_promptMC · sf_tight` e
+`L = loose_data − loose_promptMC · sf_loose`, dopo l'integrazione:
 
 ```text
-FR = T / (T + R)
-Var(FR) = [R² Var(T) + T² Var(R)] / (T + R)⁴
+FR = T / L
+Var(FR) = [L² Var(T) + T² Var(L)] / L⁴
 ```
 
-Tight e rest sono disgiunti; la covarianza fra numeratore e denominatore è
-così trattata correttamente. Gli errori sono statistici, con i Sumw2 salvati
+Ogni livello è sottratto con il fattore DY suo: il numeratore con `sf_tight`,
+il denominatore con `sf_loose`.
+
+**Tight è un sottoinsieme di loose**, quindi numeratore e denominatore sono
+correlati e la formula qui sopra *ignora* quella correlazione: è l'errore
+sumw2 ingenuo, ed è una scelta deliberata, non una svista. Sovrastima dove il
+rate è grande. È la stessa formula di `measureFakeRate.ratio`, così la curva
+ricostruita dal compare e la mappa nel ROOT non possono divergere.
+Gli errori sono statistici, con i Sumw2 salvati
 dal producer; i fattori SF sono trattati come fissi, come nei suoi ROOT.
 Non si attribuiscono errori indipendenti a ratio o chi2 tra curve sovrapposte:
 inclusive/bjet/bveto e primo/secondo leptone possono condividere eventi.

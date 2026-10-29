@@ -70,8 +70,8 @@ class Counts:
     eta: np.ndarray
     tight: np.ndarray
     var_tight: np.ndarray
-    rest: np.ndarray
-    var_rest: np.ndarray
+    loose: np.ndarray
+    var_loose: np.ndarray
 
 
 def inventory(directory):
@@ -130,20 +130,23 @@ def read_counts(source, variant):
     """Subtract in 2D before summing: corrected SF can depend on eta."""
     with uproot.open(source) as root:
         td, vt, pt, eta = read_hist(root, 'h_tight_data', source)
-        rd, vr, xp, yp = read_hist(root, 'h_rest_data', source)
+        ld, vl, xp, yp = read_hist(root, 'h_loose_data', source)
         same_edges(pt, xp, 'pT'); same_edges(eta, yp, 'eta')
         if variant != 'raw':
             suffix = '_SF' if variant == 'corrected' else ''
-            for part, data, variance in [('tight', td, vt), ('rest', rd, vr)]:
+            for part, data, variance in [('tight', td, vt), ('loose', ld, vl)]:
                 mc, vmc, xp, yp = read_hist(root, f'h_{part}_mc{suffix}', source)
                 same_edges(pt, xp, 'pT'); same_edges(eta, yp, 'eta')
                 data -= mc
                 variance += vmc
-    return Counts(pt, eta, td, vt, rd, vr)
+    return Counts(pt, eta, td, vt, ld, vl)
 
 
 def project_pt(parts, eta_mask=None):
-    """Tight/rest are disjoint. Independent channels and eta bins add in yield/variance."""
+    """tight / loose. Independent channels and eta bins add in yield and in
+    variance, so they are summed before the ratio is formed. tight is a subset
+    of loose, so the two are correlated; the error below ignores that and
+    propagates the naive sumw2, matching measureFakeRate.ratio."""
     first = parts[0]
     for other in parts[1:]:
         same_edges(first.pt, other.pt, 'pT'); same_edges(first.eta, other.eta, 'eta')
@@ -152,16 +155,16 @@ def project_pt(parts, eta_mask=None):
         # array and reorders the summation, which moves the last digit.
         values = getattr(part, field)
         return values if eta_mask is None else values[:, eta_mask]
-    n, vn, rest, vrest = [sum(selected(p, field).sum(axis=1) for p in parts)
-                          for field in ['tight', 'var_tight', 'rest', 'var_rest']]
-    denominator = n + rest
+    n, vn, loose, vloose = [sum(selected(p, field).sum(axis=1) for p in parts)
+                            for field in ['tight', 'var_tight', 'loose', 'var_loose']]
+    denominator = loose
     valid = denominator > 0
     rate = np.full_like(n, np.nan); error = np.full_like(n, np.nan)
     rate[valid] = n[valid] / denominator[valid]
-    error[valid] = np.sqrt((rest[valid]**2 * vn[valid] + n[valid]**2 * vrest[valid])
+    error[valid] = np.sqrt((vn[valid] * denominator[valid]**2 + n[valid]**2 * vloose[valid])
                            / denominator[valid]**4)
     return dict(pt_edges=first.pt, eta_edges=first.eta, rate=rate, error=error,
-                tight=n, var_tight=vn, rest=rest, var_rest=vrest, denominator=denominator,
+                tight=n, var_tight=vn, loose=loose, var_loose=vloose, denominator=denominator,
                 valid=valid, physical=valid & (rate >= 0) & (rate <= 1))
 
 
@@ -191,7 +194,7 @@ def legacy_fr_curve(source, variant):
     error[valid] = np.sqrt((weight**2 * var2d).sum(axis=1))[valid]
     blank = np.full(tight.shape, np.nan)
     return dict(pt_edges=pt, eta_edges=eta, rate=rate, error=error,
-                tight=tight, var_tight=blank, rest=denominator - tight, var_rest=blank,
+                tight=tight, var_tight=blank, loose=denominator, var_loose=blank,
                 denominator=denominator, valid=valid,
                 physical=valid & (rate >= 0) & (rate <= 1))
 
@@ -208,7 +211,7 @@ def legacy_pr_curve(source, flavor, column):
     error[~valid] = np.nan
     blank = np.full(rate.shape, np.nan)
     return dict(pt_edges=pt, eta_edges=eta[column:column + 2], rate=rate, error=error,
-                tight=blank, var_tight=blank, rest=blank, var_rest=blank, denominator=blank,
+                tight=blank, var_tight=blank, loose=blank, var_loose=blank, denominator=blank,
                 valid=valid, physical=valid & (rate <= 1),
                 eta_band=[float(eta[column]), float(eta[column + 1])])
 
@@ -414,7 +417,7 @@ def main():
     if missing and not args.allow_missing:
         ap.error('Required maps are missing:\n'+'\n'.join(missing)+'\nUse --allow-missing only for explicitly partial plots.')
     gallery = []; manifest = dict(input=args.input,variant=args.variant,variants=variants,two_lepton_channels=channels,
-                                  eta_integration='sum tight/rest and variances before forming the ratio',
+                                  eta_integration='sum tight/loose and variances before forming the ratio',
                                   legacy_input=args.legacy_input,legacy_nominal_jet=args.legacy_nominal_jet,
                                   legacy_eta_integration='legacy denominators as fixed weights on the stored per-bin rate errors',
                                   legacy_missing=legacy_missing,
@@ -529,13 +532,13 @@ def main():
             serial = {key:{field:plain(value) for field,value in curve.items()} for key,curve in table.items()}
             (folder/f'{stem}_{variant_tag}.json').write_text(json.dumps(serial,indent=2,allow_nan=False))
             with (folder/f'{stem}_{variant_tag}.csv').open('w',newline='') as stream:
-                writer=csv.writer(stream);writer.writerow(['case',first_column,'pt_low','pt_high','rate','stat_error','tight_subtracted','rest_subtracted','var_tight','var_rest','valid','physical'])
+                writer=csv.writer(stream);writer.writerow(['case',first_column,'pt_low','pt_high','rate','stat_error','tight_subtracted','loose_subtracted','var_tight','var_loose','valid','physical'])
                 for key,c in table.items():
                     case,bcat=key.split('/')      # 'bcat' may carry a jet suffix
                     for i in range(len(c['rate'])):
                         writer.writerow([case,bcat,c['pt_edges'][i],c['pt_edges'][i+1],
                                          cell(c['rate'][i]) if c['valid'][i] else '',cell(c['error'][i]) if c['valid'][i] else '',
-                                         cell(c['tight'][i]),cell(c['rest'][i]),cell(c['var_tight'][i]),cell(c['var_rest'][i]),
+                                         cell(c['tight'][i]),cell(c['loose'][i]),cell(c['var_tight'][i]),cell(c['var_loose'][i]),
                                          bool(c['valid'][i]),bool(c['physical'][i])])
         dump(curves,'curves','cat')
         if pr_curves:
