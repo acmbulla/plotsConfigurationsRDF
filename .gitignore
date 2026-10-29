@@ -224,6 +224,8 @@ Makefile
 *.bak-*
 
 # fake-rate measurement outputs: maps and diagnostic plots, kept outside the
-# repository (latinoRDF/rootfile/FakeRateMeasured). The deployed maps that the
-# configuration actually reads live in SSWW/utils/data/FakeRate and stay here.
+# repository (latinoRDF/rootfile/FakeRateMeasured). The deployed maps the
+# configuration reads are served over xrootd from the eos checkout, not from the
+# clone, so they are not tracked here either.
 SSWW/2024/FakesNum/FakeRateMeasured/
+SSWW/utils/data/FakeRate/
