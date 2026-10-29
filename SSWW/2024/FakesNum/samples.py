@@ -230,7 +230,7 @@ files = nanoGetSampleFiles(mcDirectoryPVT, 'DYto2E-2Jets_MLL-50') | \
 samples['DY'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 
 
@@ -253,7 +253,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WToENu-2Jet') | \
 samples['Wjets'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 
 
@@ -273,7 +273,7 @@ files = nanoGetSampleFiles(mcDirectory, 'TTTo2L2Nu') | \
 samples['top'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 addSubSampleWeights (samples, 'top', 'TTTo2L2Nu', 'Top_pTrw')
 
@@ -288,7 +288,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WZTo3LNu')
 samples['WZ'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 
 
@@ -300,7 +300,7 @@ files = nanoGetSampleFiles(mcDirectory, 'ZZTo4L') | \
 samples['ZZ'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 
 
@@ -314,7 +314,7 @@ files = nanoGetSampleFiles(mcDirectory, 'WWTo2L2Nu')
 samples['WW'] = {
     'name': files,
     'weight': mcCommonWeight,
-    'MaxEventsPerJob': 200000,
+    'MaxEventsPerJob': 2000000,
 }
 
 
