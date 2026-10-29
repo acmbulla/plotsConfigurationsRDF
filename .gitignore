@@ -219,3 +219,6 @@ Makefile
 # macOS
 .DS_Store
 ._*
+
+# editor backups
+*.bak-*

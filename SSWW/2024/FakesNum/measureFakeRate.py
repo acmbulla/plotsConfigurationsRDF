@@ -1645,7 +1645,7 @@ def main():
     ap.add_argument('--pt-bins', type=parse_bins, default=parse_bins(DEFAULT_PT))
     ap.add_argument('--eta-bins-ele', type=parse_bins, default=parse_bins(DEFAULT_ETA))
     ap.add_argument('--eta-bins-mu', type=parse_bins, default=parse_bins(DEFAULT_ETA))
-    ap.add_argument('--workers', type=int, default=8)
+    ap.add_argument('--workers', type=int, default=80)
     ap.add_argument('--retries', type=int, default=2)
     ap.add_argument('--max-files', type=int, default=0,
                     help='blunt global head cut on the sorted list; for a test '

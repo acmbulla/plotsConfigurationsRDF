@@ -8,7 +8,12 @@ import re
 import inspect
 
 ALL = [skey for skey in samples]
-mc = [skey for skey in samples if skey not in ('DATA', 'Fake')]
+# Every Fake* sample is data carrying a fake weight, so none of them is MC.
+# The comparison samples (Fake_regions, Fake_lep1, Fake_1l in samples.py) have
+# to drop out of `mc` exactly as Fake does, or they inherit the MC-only
+# weights and aliases and die on the first gen-level branch.
+fakes = [skey for skey in samples if skey == 'Fake' or skey.startswith('Fake_')]
+mc = [skey for skey in samples if skey != 'DATA' and skey not in fakes]
 lhesamples = [skey for skey in mc if skey not in ('ggWW', 'ZZ', 'WW_DPS')]
 
 btagmaps = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/btag'
@@ -290,7 +295,7 @@ for _c, _e in (
         ('muonIdx',         'ROOT::VecOps::RVec<int>(Lepton_muonIdx)')):
     aliases['SelLep_' + _c] = {
         'expr'   : f'Take({_e}, nLepSel)',
-        'samples': ['Fake'],
+        'samples': fakes,
     }
 
 for kind, label in [
@@ -330,13 +335,104 @@ for kind, label in [
                               'SelLep_isTightElectron',
                               'SelLep_muonIdx',
                               'CleanJet_pt', '(int)nCleanJet'],
-            'samples'      : ['Fake'],
+            'samples'      : fakes,
         }
 
     aliases['fakeW' + label] = {
         'expr'   : 'fakeW2l%s + fakeW3l%s' % (label, label),
-        'samples': ['Fake'],
+        'samples': fakes,
     }
+
+
+# -------- fake rate from the region-split maps
+#
+# measureFakeRate.py (FakesNum) measures the rate separately in each region it
+# can be applied in: one lepton, and two leptons split by flavour pair and by
+# which of the two the probe is. The maps live under
+# <fakerates_regions>/<year>/<WP>/ as
+#   {Ele,Muon}FR_{1l,ee,mumu,emu}[_lep0,_lep1]_<bcat>.root
+#   ElePR_ee_lep{0,1}.root / MuonPR_mumu_lep{0,1}.root
+# The prompt rate has no 1l and no emu map -- it is measured on the Z peak, so
+# it only exists same-flavour -- and no b category, so it carries no <bcat>.
+#
+# These are defined ALONGSIDE fakeW above, not in place of it: the point of
+# this branch is to compare them, which means pointing samples.py at one name
+# or another and rerunning.
+# Same tree as the jet20/30/40 maps above, so the same base: these live in
+# this repo, under utils/data/FakeRate/<year>/<WP>/, and the jobs read them
+# over xrootd from the clone on EOS.
+#
+# Which maps. The rate is applied in the signal region, which requires two
+# jets, so the >=2-jet bin is the one to read: the measurement put the muon
+# rate there 0.06-0.08 below the 0- and 1-jet bins at every pT, so the
+# jet-inclusive map overestimates it by 15-20% where it is used.
+#
+# Two things follow from that choice and neither is free:
+#
+#  1. jet-binned means b-INCLUSIVE. The jet-binned measurement was run with
+#     bcat='incl' only, so there is no bveto_j2 map to read and this is not a
+#     choice the string below can express. Going from the jet-inclusive
+#     'bveto' maps to these changes two things at once -- the jet bin and the
+#     b category -- which is worth remembering when the comparison moves.
+#  2. the prompt rate stays jet-inclusive. measureFakeRate.py writes one PR
+#     per region and no category at all, so f comes from >=2 jets and p from
+#     everything. Every denominator in the matrix method is (p - f), and p
+#     measured jet-inclusively is the more isolated population, hence too
+#     high -- which makes the fake weight f*p/(p-f) too SMALL, not too big.
+fakerates_regions = fakerates
+fakerates_regions_year = '2024_v15_pt_jetbinned'
+fakerates_bcat = 'incl'
+fakerates_jetcat = 'j2'
+
+# Three readers, one class: they differ only in which map a lepton is sent to.
+#   auto -- the region the event is actually in
+#   lep1 -- always the subleading-probe maps, for the alternative sample
+#   1l   -- always the single-lepton maps
+# The 1l rate is measured with the probe itself firing the single-lepton
+# trigger, so it is pulled up by the HLT isolation (measureFakeRate.py:55-70):
+# it is a cross-check, not the number to apply.
+#
+# fakeW_pr1 is the same 'auto' reader with the prompt rate forced to 1. That
+# kills the TT term outright -- w_TT is proportional to (1 - p) -- and leaves
+# the textbook fake-rate method: e = f/(1-f) on a failing lepton, -e^2 on two.
+# The measured p is 0.85-0.93, so this is NOT a better estimate; it is the
+# control that says whether the negative first pT bin comes from p or from f.
+for _name, _mode, _inst_tag, _pr1 in [
+    ('fakeW_regions', 'auto', 'auto', False),
+    ('fakeW_lep1',    'lep1', 'lep1', False),
+    ('fakeW_1l',      '1l',   'onel', False),
+    ('fakeW_pr1',     'auto', 'pr1',  True),
+]:
+    # Only the statistical variations: these maps are split by b category, not
+    # by jet pT, so the EleUp/MuUp pair of the jet20/30/40 files has no
+    # counterpart here.
+    for _kind, _label in [
+        ('nominal',     ''),
+        ('StatEleUp',   'StatEleUp'),
+        ('StatEleDown', 'StatEleDown'),
+        ('StatMuUp',    'StatMuUp'),
+        ('StatMuDown',  'StatMuDown'),
+    ]:
+        _instance = f'fr_regions_{_inst_tag}_{_label or "nominal"}'
+        aliases[_name + _label] = {
+            'external'     : f'{macros}fake_rate_reader_regions.cc',
+            'linesToGlobal': [
+                f'fake_rate_reader_regions {_instance}'
+                f'("{fakerates_regions}", "{fakerates_regions_year}", '
+                f'"{eleWP}", "{muWP}", "{fakerates_bcat}", '
+                f'"{fakerates_jetcat}", "{_mode}", "{_kind}", '
+                f'-1., {"true" if _pr1 else "false"});'
+            ],
+            'function'     : _instance,
+            # One instance for every multiplicity, unlike fake_rate_reader:
+            # the weight is the same matrix-method sum over prompt/fake
+            # assignments whatever the lepton count, so there is nothing to
+            # split and nothing to add up afterwards.
+            'variables'    : ['SelLep_pdgId', 'SelLep_pt', 'SelLep_eta',
+                              'SelLep_isTightMuon',
+                              'SelLep_isTightElectron'],
+            'samples'      : fakes,
+        }
 
 #Top pT reweighting
 aliases['Top_pTrw'] = {
