@@ -543,21 +543,24 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 # path is a .root wrapper, so xrootd reaches them from a batch node the way it
 # already reaches the b-tag and fake-rate maps.
 #
-# They are served from SSWW/2024/rootFile, which is mkShapes' output directory
-# and is in .gitignore on every branch -- so git never touches it at a checkout.
-# That is the whole point: the path is read on eos by the batch jobs, and a
-# checkout of a branch that does not track SSWW/utils/data/dnn deletes it.
-# Which is what happened: switching the eos clone to FakeRate removed the
-# directory and every job died with "dnn_reader: cannot open ...".
+# They are served from SSWW/2024/rootFile/dnn. That directory sits under
+# mkShapes' output folder, which .gitignore lists on every branch, so git never
+# adds or removes anything in it at a checkout -- which is the whole point. The
+# jobs read this path on eos, and a checkout of a branch that does not track
+# SSWW/utils/data/dnn deletes that directory: switching the eos clone to
+# FakeRate did exactly that and every job died with
+# "dnn_reader: cannot open ...". Being under rootFile also puts the weights
+# beside the per-tagger subdirectories rather than inside one, so cleaning a
+# tagger does not take them.
 #
 # The copies under SSWW/utils/data/dnn stay tracked, because they are the record
 # of which network produced a given set of plots and they are half a megabyte.
 # After re-exporting a model, copy them across or the jobs go on reading the old
 # network without saying anything:
 #
-#   cp SSWW/utils/data/dnn/*.root SSWW/2024/rootFile/
+#   cp SSWW/utils/data/dnn/*.root SSWW/2024/rootFile/dnn/
 #
-dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile'
+dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/dnn'
 
 ###############################################################################
 #  The inputs                                                                  #

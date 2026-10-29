@@ -69,6 +69,21 @@ then, here:
 python3 ../../scripts/pack_dnn_weights.py <file>.dnn <file>.root
 ```
 
+and finally into the directory the jobs actually read, which is **not** this
+one:
+
+```sh
+cp *.root ../../../2024/rootFile/dnn/
+```
+
+The files here are the tracked record of which network made which plots. The
+copy under `SSWW/2024/rootFile/dnn` is what `dnnweights` in `aliases.py` points
+at, and it is there because `rootFile` is gitignored on every branch: this
+directory only exists on the branch that tracks it, so checking the eos clone
+out onto another one deletes it under the running jobs. Forgetting this copy
+after a re-export is the one way the deployment can now go quietly wrong -- the
+jobs keep reading the previous network and nothing complains.
+
 The `.dnn` text files are not kept in this repository. They are a megabyte of
 fitted numbers each and they belong to a training run; the run is what is worth
 citing, and `export_dnn_reader.py` rebuilds the file from it in minutes.

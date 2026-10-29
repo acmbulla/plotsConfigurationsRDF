@@ -11,6 +11,12 @@ TFile::Open, which handles the URL.
     python3 pack_dnn_weights.py twostage_uparT_open_64x32.dnn \
             ../data/dnn/twostage_uparT_open_64x32.root
 
+The .root under ../data/dnn is the tracked record. The jobs read a copy of it
+in SSWW/2024/rootFile/dnn, which is gitignored and therefore survives a branch
+switch, so the last step is
+
+    cp ../data/dnn/*.root ../../2024/rootFile/dnn/
+
 The .dnn text files themselves are produced by `scripts/export_dnn_reader.py`
 in the sibling DNN project and are not kept in this repository: they are a
 megabyte of fitted numbers each, they belong to a training run, and the run
