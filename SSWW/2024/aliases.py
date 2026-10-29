@@ -391,10 +391,17 @@ fakerates_jetcat = 'j2'
 # The 1l rate is measured with the probe itself firing the single-lepton
 # trigger, so it is pulled up by the HLT isolation (measureFakeRate.py:55-70):
 # it is a cross-check, not the number to apply.
-for _name, _mode, _inst_tag in [
-    ('fakeW_regions', 'auto', 'auto'),
-    ('fakeW_lep1',    'lep1', 'lep1'),
-    ('fakeW_1l',      '1l',   'onel'),
+#
+# fakeW_pr1 is the same 'auto' reader with the prompt rate forced to 1. That
+# kills the TT term outright -- w_TT is proportional to (1 - p) -- and leaves
+# the textbook fake-rate method: e = f/(1-f) on a failing lepton, -e^2 on two.
+# The measured p is 0.85-0.93, so this is NOT a better estimate; it is the
+# control that says whether the negative first pT bin comes from p or from f.
+for _name, _mode, _inst_tag, _pr1 in [
+    ('fakeW_regions', 'auto', 'auto', False),
+    ('fakeW_lep1',    'lep1', 'lep1', False),
+    ('fakeW_1l',      '1l',   'onel', False),
+    ('fakeW_pr1',     'auto', 'pr1',  True),
 ]:
     # Only the statistical variations: these maps are split by b category, not
     # by jet pT, so the EleUp/MuUp pair of the jet20/30/40 files has no
@@ -413,7 +420,8 @@ for _name, _mode, _inst_tag in [
                 f'fake_rate_reader_regions {_instance}'
                 f'("{fakerates_regions}", "{fakerates_regions_year}", '
                 f'"{eleWP}", "{muWP}", "{fakerates_bcat}", '
-                f'"{fakerates_jetcat}", "{_mode}", "{_kind}");'
+                f'"{fakerates_jetcat}", "{_mode}", "{_kind}", '
+                f'-1., {"true" if _pr1 else "false"});'
             ],
             'function'     : _instance,
             # One instance for every multiplicity, unlike fake_rate_reader:

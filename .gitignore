@@ -216,3 +216,9 @@ Makefile
 
 # Except ROOT files in utils/
 !SSWW/utils/**/*.root
+# macOS
+.DS_Store
+._*
+
+# editor backups
+*.bak-*

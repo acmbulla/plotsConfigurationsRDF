@@ -89,7 +89,8 @@ public:
                            TString jetcat  = "",
                            TString mode    = "auto",
                            TString kind    = "nominal",
-                           float   fr_pt_max = -1.);
+                           float   fr_pt_max = -1.,
+                           bool    prompt_one = false);
 
   float operator()(ROOT::VecOps::RVec<int>   Lepton_pdgId,
                    ROOT::VecOps::RVec<float> Lepton_pt,
@@ -108,6 +109,13 @@ private:
   TString mode_;
   TString kind_;
   float   fr_pt_max_;
+
+  // Force p = 1 for every lepton, which is the assumption that reduces the
+  // matrix method to the plain fake-rate method: w_TT vanishes identically,
+  // a failing lepton weighs e = f/(1-f) and two of them -e^2. It is a
+  // diagnostic, not a correction -- the measured p is 0.85-0.93, not 1 --
+  // and it exists to tell a sick p apart from a sick f.
+  bool    prompt_one_;
 
   void load(const std::string& key, TString path, TString histo);
 
@@ -130,9 +138,11 @@ fake_rate_reader_regions::fake_rate_reader_regions(TString base,
                                                    TString jetcat,
                                                    TString mode,
                                                    TString kind,
-                                                   float   fr_pt_max)
+                                                   float   fr_pt_max,
+                                                   bool    prompt_one)
   : maps_(std::make_shared<std::map<std::string, std::shared_ptr<TH2F>>>()),
-    mode_(mode), kind_(kind), fr_pt_max_(fr_pt_max) {
+    mode_(mode), kind_(kind), fr_pt_max_(fr_pt_max),
+    prompt_one_(prompt_one) {
 
   std::cout << "fake_rate_reader_regions: base " << base
             << " year " << year
@@ -141,7 +151,8 @@ fake_rate_reader_regions::fake_rate_reader_regions(TString base,
             << " bcat " << bcat
             << " jetcat " << (jetcat == "" ? TString("-") : jetcat)
             << " mode " << mode
-            << " kind " << kind << std::endl;
+            << " kind " << kind
+            << (prompt_one ? " PROMPT RATE FORCED TO 1" : "") << std::endl;
 
   if (mode != "auto" && mode != "lep1" && mode != "1l")
     std::cout << "fake_rate_reader_regions: unknown mode '" << mode
@@ -311,6 +322,11 @@ float fake_rate_reader_regions::operator()(
       if      (kind_ == "StatMuUp")    f += fe;
       else if (kind_ == "StatMuDown")  f -= fe;
     }
+
+    // Diagnostic mode: ignore the measured prompt rate entirely. Applied
+    // before the guards below so that the maps are still read (and still
+    // reported if missing) -- only the value is discarded.
+    if (prompt_one_) p = 1.;
 
     // An empty or nonphysical bin must not turn into a huge weight. A prompt
     // rate outside (0,1] means the bin was not measured, and 1 -- every prompt

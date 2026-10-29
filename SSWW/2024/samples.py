@@ -641,5 +641,9 @@ samples['Fake']['subsamples'] = {
     'regions': {'cut': 'nLepSel >= 0', 'weight': 'fakeW_regions'},
     'lep1'   : {'cut': 'nLepSel >= 0', 'weight': 'fakeW_lep1'},
     '1l'     : {'cut': 'nLepSel >= 0', 'weight': 'fakeW_1l'},
+    # Diagnostic: same maps as 'regions', prompt rate forced to 1, so the TT
+    # term disappears and only e and -e^2 survive. If the negative first pT
+    # bin goes away here, it was p; if it stays, it was f.
+    'pr1'    : {'cut': 'nLepSel >= 0', 'weight': 'fakeW_pr1'},
 }
 

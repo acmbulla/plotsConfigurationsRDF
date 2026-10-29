@@ -2,7 +2,7 @@
 
 tag = 'SSWW'
 # tagger = 'SSWW_260923_test24'
-tagger = '261012_24'
+tagger = '261027_24'
 # tagger = '261014_vdebug3_24'
 
 # used by mkShape to define output directory for root files
@@ -37,7 +37,7 @@ lumi = 110.11
 
 # used by mkPlot to define output directory for plots
 # different from "outputDir" to do things more tidy
-outputDirPlots = 'plots/' + tagger
+outputDirPlots = 'plots/' + tagger+"_FakeNominal"
 
 # used by mkDatacards to define output directory for datacards
 outputDirDatacard = 'datacards/' + tagger
