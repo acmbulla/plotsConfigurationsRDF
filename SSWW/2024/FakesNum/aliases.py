@@ -697,6 +697,52 @@ aliases['ptll'] = {
              ' : -1.f'),
     'samples': ALL
 }
+# -------- mT of the dilepton+MET system, the "Higgs" transverse mass.
+# Needed only by the same-sign closure test of AN-24-128 section 6.5, which
+# asks for mT^H > 60 GeV. Defined here rather than recomputed downstream
+# because it needs PuppiMET_phi, and PuppiMET_phi is not dumped: this one
+# float replaces it.
+#
+#   mT^H = sqrt(2 * ptll * MET * (1 - cos(dphi(ll, MET))))
+#
+aliases['mth'] = {
+    'expr': ('nLepSel == 2'
+             ' ? (float)sqrt(2.f * ptll * PuppiMET_pt'
+             '      * (1.f - cos(ROOT::VecOps::DeltaPhi('
+             '            (float)atan2(SelLep_pt[0] * sin(SelLep_phi[0])'
+             '                       + SelLep_pt[1] * sin(SelLep_phi[1]),'
+             '                         SelLep_pt[0] * cos(SelLep_phi[0])'
+             '                       + SelLep_pt[1] * cos(SelLep_phi[1])),'
+             '            (float)PuppiMET_phi))))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# -------- dR between each selected lepton and the HIGHEST-pT jet.
+# AN-24-128 line 481 and 498: the fakeable object must be separated from the
+# leading jet of the event by dR > 1.0 -- the leading jet specifically, not
+# "every jet", and 1.0, not the 0.7 the nAwayJet* counters use. So neither
+# nAwayJet* nor CleanJet_* with a 0.7 radius reproduces it, and this is the
+# branch their denominator is actually cut on.
+#
+# NB: written with ROOT::VecOps::DeltaR and *not* with
+# sqrt(pow(deta,2) + pow(dphi,2)). On an RVec, pow(x, 2) resolves to an
+# integer-exponent overload that truncates the base: measured on a synthetic
+# frame, a lepton at (eta 0.5, phi 0.3) against a jet at (eta 2.0, phi -1.0)
+# came out 1.41421 instead of 1.98494, because -1.5 and 1.3 were squared as
+# -1 and 1. It compiles, it runs, and it is silently wrong -- so no pow() on a
+# vector anywhere in this file.
+aliases['SelLep_drJet0'] = {
+    'expr': ('nCleanJet > 0'
+             ' ? ROOT::VecOps::DeltaR('
+             '     SelLep_eta,'
+             '     ROOT::VecOps::RVec<float>(SelLep_eta.size(), CleanJet_eta[0]),'
+             '     SelLep_phi,'
+             '     ROOT::VecOps::RVec<float>(SelLep_phi.size(), CleanJet_phi[0]))'
+             ' : ROOT::VecOps::RVec<float>(SelLep_pt.size(), -1.f)'),
+    'samples': ALL
+}
+
 aliases['dphi_ll'] = {
     'expr': ('nLepSel == 2'
              ' ? (float)abs(ROOT::VecOps::DeltaPhi(SelLep_phi[0], SelLep_phi[1]))'
