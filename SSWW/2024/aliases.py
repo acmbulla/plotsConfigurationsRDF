@@ -812,11 +812,54 @@ aliases['dnn_inputs'] = {
 # and validates the weight file, so a wrong path or a truncated file stops the
 # job instead of producing a column of zeros.
 #
-# Output layout, which dnn_reader_class.cc documents and enforces:
+# Each call returns one RVec<float> per event, ending in three columns that
+# are the ones the analysis actually uses:
+#
+#   axis      the continuous discriminant being binned -- the stage-1 signal
+#             probability for the two-stage model, the winning class
+#             probability for the four-head one.
+#   cell      an INTEGER, the categorical part of the observable: the discrete
+#             choice the network made. No bin ever crosses it.
+#   unrolled  `cell + F_cell(axis)`, the integer cell plus a fraction in
+#             [0, 1) -- the axis mapped through the empirical CDF of the
+#             reference signal INSIDE THAT CELL, frozen into the weight file
+#             at export time. This is the one column to histogram.
+#
+# Why unrolled and not the raw score: F_cell is a CDF, so that fraction is
+# uniform on [0, 1) by construction, and `n` equal-width bins inside one cell
+# are exactly that cell's `n` quantile bins. The quantile rule therefore
+# travels inside the weight file, where it belongs -- the edges are a property
+# of this network and moved when it was retrained -- while the NUMBER of bins
+# stays a free choice in variables.py. Only multiples of the cell count are
+# meaningful: a bin straddling two cells averages two categories and the fit
+# reads the average.
+#
+# The cells, as the two deployed weight files define them:
+#
+#   twostage_uparT_open_64x32  6 cells = argmax(stage 2) in {LL, TL, TT},
+#              times the stage-2 winning probability cut in two at 0.569 (LL),
+#              0.450 (TL), 0.472 (TT). So the cell says which polarisation the
+#              second stage picked and how sure it was, and the axis inside it
+#              is the stage-1 signal-vs-background score. dnn2s_unrolled is
+#              therefore in [0, 6).
+#   mc4_uparT_open_64x32       4 cells = argmax in {background, LL, TL, TT},
+#              with no sub-split, and the axis is that winning probability.
+#              dnn4_unrolled is in [0, 4).
+#
+# How many bins is NOT decided here: variables.py does it, today 24 for each
+# observable (6 cells x 4 and 4 cells x 6), with `dnn_bins` there to spend a
+# different number per cell. Its comment block is the place to read next.
+#
+# Index by index, which is what the [i] below are:
 #   two-stage  [0,1] stage-1 background/signal, [2..4] stage-2 LL/TL/TT,
-#              [5] stage-1 signal score, [6] cell, [7] unrolled
-#   multiclass [0..3] background/LL/TL/TT, [4] winning probability,
-#              [5] category, [6] unrolled
+#              [5] axis = stage-1 signal score, [6] cell, [7] unrolled
+#   multiclass [0..3] background/LL/TL/TT, [4] axis = winning probability,
+#              [5] cell, [6] unrolled
+#
+# **Only `dnn2s_unrolled` and `dnn4_unrolled` are needed to fit.** Every other
+# alias below is for control plots and for debugging, and none of them costs
+# anything: RDF evaluates a Define only when a booked action asks for it, so
+# an unused alias is compile time and no event loop.
 # ------------------------------------------------
 aliases['dnn2s'] = {
     'external'     : f'{macros}dnn_reader_class.cc',
@@ -830,11 +873,18 @@ aliases['dnn2s'] = {
     'variables'    : ['dnn_inputs', '(unsigned long long)event'],
     'samples'      : ALL
 }
+# The stage-2 probabilities are CONDITIONAL on the event being signal: the
+# three sum to one whatever the stage-1 score says, so read them together with
+# dnn2s_signal and never as a yield.
 aliases['dnn2s_p_LL']     = {'expr': 'dnn2s[2]', 'samples': ALL}
 aliases['dnn2s_p_TL']     = {'expr': 'dnn2s[3]', 'samples': ALL}
 aliases['dnn2s_p_TT']     = {'expr': 'dnn2s[4]', 'samples': ALL}
+# The axis: p(signal) of the first stage, the LL+TL+TT-vs-background score.
 aliases['dnn2s_signal']   = {'expr': 'dnn2s[5]', 'samples': ALL}
+# 0..5, as 2 * argmax(LL/TL/TT) + (stage-2 winning probability above its cell
+# edge). Cut on it to select one cell, or plot it to see the populations.
 aliases['dnn2s_cell']     = {'expr': 'dnn2s[6]', 'samples': ALL}
+# The observable to fit.
 aliases['dnn2s_unrolled'] = {'expr': 'dnn2s[7]', 'samples': ALL}
 # The unrolled variable with its cell stripped off: the stage-1 score mapped
 # through the frozen CDF of its own cell, uniform on [0, 1). Histogramming
@@ -854,8 +904,11 @@ aliases['dnn4_p_bkg']    = {'expr': 'dnn4[0]', 'samples': ALL}
 aliases['dnn4_p_LL']     = {'expr': 'dnn4[1]', 'samples': ALL}
 aliases['dnn4_p_TL']     = {'expr': 'dnn4[2]', 'samples': ALL}
 aliases['dnn4_p_TT']     = {'expr': 'dnn4[3]', 'samples': ALL}
+# The axis: the probability of the winning class, so always >= 0.25.
 aliases['dnn4_pmax']     = {'expr': 'dnn4[4]', 'samples': ALL}
+# The cell, 0..3: 0 background, 1 LL, 2 TL, 3 TT -- the argmax, nothing else.
 aliases['dnn4_cat']      = {'expr': 'dnn4[5]', 'samples': ALL}
+# The observable to fit.
 aliases['dnn4_unrolled'] = {'expr': 'dnn4[6]', 'samples': ALL}
 aliases['dnn4_q']        = {'expr': '(float)(dnn4[6] - dnn4[5])', 'samples': ALL}
 
