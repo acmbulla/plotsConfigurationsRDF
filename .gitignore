@@ -216,3 +216,8 @@ Makefile
 
 # Except ROOT files in utils/
 !SSWW/utils/**/*.root
+
+# macOS writing over the eos sshfs mount: AppleDouble resource forks and Finder
+# metadata. Never content -- 814 of them had piled up next to the configs.
+.DS_Store
+._*
