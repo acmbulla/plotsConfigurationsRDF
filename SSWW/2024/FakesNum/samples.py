@@ -248,8 +248,8 @@ samples['DY'] = {
 # jet. The two series are alternatives, never summed.
 
 files = nanoGetSampleFiles(mcDirectory, 'WToENu-2Jet') | \
-        nanoGetSampleFiles(mcDirectory, 'WToMuNu-2Jet')
-        # nanoGetSampleFiles(mcDirectory, 'WToTauNu-2Jet')
+        nanoGetSampleFiles(mcDirectory, 'WToMuNu-2Jet') | \
+        nanoGetSampleFiles(mcDirectory, 'WToTauNu-2Jet')
 samples['Wjets'] = {
     'name': files,
     'weight': mcCommonWeight,
