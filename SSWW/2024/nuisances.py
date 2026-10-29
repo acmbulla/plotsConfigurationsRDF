@@ -370,15 +370,15 @@ for _proc, _skeys in _qcdscale.items():
         'samples' : {s: [_lhe_up, _lhe_down] for s in _skeys},
     }
 
-## PDF uncertainties - RDataFrame syntax (no Alt())
-for i in range(103):
-    _pdf_w = f'LHEPdfWeight_vec.size() > {i} ? LHEPdfWeight_vec[{i}] : 1.'
-    nuisances[f'pdf_ev{i}'] = {
-        'name'    : f'pdf_ev{i}',
-        'kind'    : 'weight',
-        'type'    : 'shape',
-        'samples' : {s: [_pdf_w, _pdf_w] for s in lhesamples}
-    }
+# ## PDF uncertainties - RDataFrame syntax (no Alt())
+# for i in range(103):
+#     _pdf_w = f'LHEPdfWeight_vec.size() > {i} ? LHEPdfWeight_vec[{i}] : 1.'
+#     nuisances[f'pdf_ev{i}'] = {
+#         'name'    : f'pdf_ev{i}',
+#         'kind'    : 'weight',
+#         'type'    : 'shape',
+#         'samples' : {s: [_pdf_w, _pdf_w] for s in lhesamples}
+#     }
 
 
 nuisances['fake_syst'] = {
