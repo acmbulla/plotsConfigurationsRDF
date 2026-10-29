@@ -499,3 +499,371 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 #   'xmlfile'  : 'code/TMVAClassification_BDTG.weights.xml',
 #   'samples': ALL
 # }
+
+###############################################################################
+#                                                                             #
+#  The polarisation networks                                                   #
+#                                                                             #
+#  Two frozen models from the sibling DNN project, deployed as columns:         #
+#                                                                             #
+#    dnn2s_*  the two-stage UParT model -- stage 1 separates signal from        #
+#             background, stage 2 separates LL/TL/TT. Best expected            #
+#             sensitivity on mu_LX of everything that was tried.                #
+#    dnn4_*   the four-head multiclass UParT model (background/LL/TL/TT),       #
+#             second best, and the one that gives three process outputs in      #
+#             one network.                                                      #
+#                                                                             #
+#  Both read the SAME 42 inputs, so there is one input vector and two reader    #
+#  instances over it. The weights -- the fitted preprocessing, the dense        #
+#  layers of all ten cross-fit folds and the binning tables -- are frozen into  #
+#  a file by `scripts/export_dnn_reader.py` in the DNN project. No torch, no    #
+#  onnxruntime, no SOFIE: the reader is a matrix-vector loop, so nothing is     #
+#  added to the link line.                                                      #
+#                                                                             #
+#  WHAT TO HISTOGRAM: `dnn2s_unrolled` and `dnn4_unrolled`. variables.py has    #
+#  the binning, including how to give each class its own bin count.             #
+#                                                                             #
+#  TWO THINGS TO KNOW BEFORE QUOTING A NUMBER FROM THESE TEMPLATES.             #
+#                                                                             #
+#  1. Every event is scored by the ten-fold ENSEMBLE, because the training      #
+#     fold assignment is a StratifiedKFold over a table a batch job cannot      #
+#     see. So simulation the networks trained on is scored partly in sample     #
+#     and its templates are optimistically sharp. The reader also supports a    #
+#     `parity` rule -- model `event % n` -- which IS reproducible here; using    #
+#     it needs a training that held its folds out that way.                     #
+#                                                                             #
+#  2. The networks were trained on a LOOSER region than WW_SR: two jets above   #
+#     30 GeV, mjj > 200, no detajj cut and no b veto. Inside WW_SR that is an   #
+#     interpolation and is fine. In the 3- and 4-lepton regions the inputs are  #
+#     sentinel and the output is whatever the imputation says.                  #
+#                                                                             #
+###############################################################################
+
+# The weights. Read once per job at construction, through TFile::Open when the
+# path is a .root wrapper, so xrootd reaches them from a batch node the way it
+# already reaches the b-tag and fake-rate maps.
+dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/utils/data/dnn'
+
+###############################################################################
+#  The inputs                                                                  #
+#                                                                             #
+#  MOST OF THEM ALREADY EXIST. The training ntuple (branch DNNTraining) dumped  #
+#  its own `dnn_*` copies because mkSnapshot needed flat columns, but in the    #
+#  nanoAOD the same numbers are already there, from mkShapesRDF's               #
+#  l2KinProducerFilter. Redefining them here would be two spellings of one      #
+#  quantity drifting apart, so they are NOT redefined -- the feature list below #
+#  names the existing branch.                                                   #
+#                                                                             #
+#  This was checked and not assumed. Recomputing each candidate from            #
+#  Lepton_*/CleanJet_* on 604945 snapshot events with nLepSel > 1 and           #
+#  comparing against the stored `dnn_*` column:                                 #
+#                                                                             #
+#    pt1 eta1 pt2 eta2        identical, 0 events differ                        #
+#    ptll detall drll          max |diff| 1e-4 or below, 0 events above 1e-3     #
+#    dphilmet1 drjj            max |diff| 5e-7                                   #
+#    dphilep1jet1/2            max |diff| 2e-7                                   #
+#    mth vs dnn_mTww           max |diff| 0.05 GeV on 304 of 604945 events,      #
+#                              i.e. float32 rounding in a near-cancellation      #
+#                                                                             #
+#  Two do NOT match and must not be substituted: nanoAOD's `dphill` and         #
+#  `dphijj` are SIGNED, the networks were trained on |dphi|. Hence the two      #
+#  `abs*` aliases below -- new quantities, not duplicates.                       #
+#                                                                             #
+#  Also checked: SelLep_* (leptons above 10 GeV) and Lepton_* have the same     #
+#  leading two entries in 604945 of 604945 events, so a quantity built on       #
+#  Lepton_[0,1] is the one the networks were trained on.                        #
+#                                                                             #
+#  SENTINELS. A sentinel is not a defect to be patched: it means "this          #
+#  quantity does not exist for this event", and the reader imputes the          #
+#  training-fold median and raises an absence indicator. It recognises the      #
+#  three the training used -- -9999, -1, -99 -- and nanoAOD uses -9999 for      #
+#  most of these but -999.9 for a few, which the reader would take as a real    #
+#  value. `_absent` below maps anything below -90 onto -9999, which is exactly  #
+#  equivalent on the training data (no input of this list is legitimately       #
+#  below -90) and safe on everything else.                                      #
+###############################################################################
+
+def _absent(expr):
+    """Normalise a branch's own sentinel onto one the reader recognises."""
+    return '(float)((%s) > -90.f ? (%s) : -9999.f)' % (expr, expr)
+
+
+def _jet(i, var, sentinel):
+    """A pT-ordered CleanJet scalar; CleanJet_* has no flat nanoAOD copy."""
+    return '(float)(CleanJet_pt.size() > %d ? CleanJet_%s[%d] : %s)' % (i, var, i, sentinel)
+
+
+def _jet_mass(i):
+    return ('(float)(CleanJet_pt.size() > %d'
+            ' ? Take(Jet_mass, CleanJet_jetIdx, -1.f)[%d] : -1.f)' % (i, i))
+
+
+# -- the two that differ from the nanoAOD branch of the same name -------------
+#
+# |dphi|, which is what the networks saw. The guard matters: abs(-9999) is
+# +9999, which is a perfectly good-looking number and would be fed to the
+# network as one.
+aliases['absdphill'] = {
+    'expr': '(float)(dphill > -90.f ? abs(dphill) : -9999.f)',
+    'samples': ALL
+}
+aliases['absdphijj'] = {
+    'expr': '(float)(dphijj > -90.f ? abs(dphijj) : -9999.f)',
+    'samples': ALL
+}
+
+# -- quantities the nanoAOD does not have -------------------------------------
+
+# Zeppenfeld per object. zstar_max above is these two collapsed by a max();
+# the networks get both separately.
+aliases['zepp_l1'] = {
+    'expr': ('nLepSel > 0 && CleanJet_pt.size() > 1 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(SelLep_eta[0] - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+aliases['zepp_l2'] = {
+    'expr': ('nLepSel > 1 && CleanJet_pt.size() > 1 && abs(CleanJet_eta[0] - CleanJet_eta[1]) > 0.f'
+             ' ? (float)abs(SelLep_eta[1] - 0.5f*(CleanJet_eta[0] + CleanJet_eta[1]))'
+             '   / (float)abs(CleanJet_eta[0] - CleanJet_eta[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# R_pT, the standard VBS balance variable.
+aliases['Rpt'] = {
+    'expr': ('nLepSel > 1 && CleanJet_pt.size() > 1'
+             ' ? (float)(SelLep_pt[0]*SelLep_pt[1]) / (float)(CleanJet_pt[0]*CleanJet_pt[1])'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# pT asymmetry of the pair: a longitudinal pair shares the energy more evenly.
+aliases['ptAsymll'] = {
+    'expr': ('nLepSel > 1 && (SelLep_pt[0] + SelLep_pt[1]) > 0.f'
+             ' ? (float)(SelLep_pt[0] - SelLep_pt[1]) / (SelLep_pt[0] + SelLep_pt[1])'
+             ' : -9.f'),
+    'samples': ALL
+}
+
+# ATLAS Table 2's projected transverse mass. Distinct from `mth`, which treats
+# the dilepton as one visible object; this keeps the two leptons separate in
+# the scalar term, so it responds differently when they are back to back.
+aliases['vsum_px'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)(SelLep_pt[0]*cos(SelLep_phi[0]) + SelLep_pt[1]*cos(SelLep_phi[1])'
+             '           + PuppiMET_pt*cos(PuppiMET_phi))'
+             ' : -9999.f'),
+    'samples': ALL
+}
+aliases['vsum_py'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)(SelLep_pt[0]*sin(SelLep_phi[0]) + SelLep_pt[1]*sin(SelLep_phi[1])'
+             '           + PuppiMET_pt*sin(PuppiMET_phi))'
+             ' : -9999.f'),
+    'samples': ALL
+}
+aliases['mTo'] = {
+    'expr': ('nLepSel > 1'
+             ' ? (float)sqrt(std::max(0.,'
+             '     pow((double)(SelLep_pt[0] + SelLep_pt[1] + PuppiMET_pt), 2)'
+             '   - pow((double)vsum_px, 2) - pow((double)vsum_py, 2)))'
+             ' : -1.f'),
+    'samples': ALL
+}
+
+# RAPIDITY gap of the tagging jets. detajj (pseudorapidity) is what the
+# regions cut on and it stays; this is what the ATLAS DNN uses, and for a
+# massive jet the two are not the same.
+aliases['dyjj'] = {
+    'function' : 'deltaYjj',
+    'variables': ['CleanJet_pt', 'CleanJet_eta',
+                  'Take(Jet_mass, CleanJet_jetIdx, 0.f)'],
+    'external' : f'{macros}VBS_functions.cpp',
+    'samples'  : ALL
+}
+
+# Smallest dR between any selected lepton and any jet above 30 GeV: what
+# catches a lepton sitting inside a soft jet, the nonprompt signature.
+aliases['drlj_min'] = {
+    'function' : 'minDeltaRLepJet',
+    'variables': ['SelLep_eta', 'SelLep_phi',
+                  'CleanJet_pt', 'CleanJet_eta', 'CleanJet_phi'],
+    'external' : f'{macros}VBS_functions.cpp',
+    'samples'  : ALL
+}
+
+# The continuous UParT inputs: the two tagging jets' own scores, and the
+# largest score among central jets -- the b veto as a variable rather than a
+# cut. No central jet gives -9999, and that absence is itself the VBS
+# signature, so it travels in the indicator instead of being patched.
+aliases['btag_jets'] = {
+    'function' : 'dnnJetBtag',
+    # Types are pinned here and not in the C++: the branch type belongs to the
+    # input data (CleanJet_jetIdx is genuinely unsigned 64-bit in these
+    # nanoAODs) while the helper signature is shared by every year, and the
+    # typed Define compares types rather than converting silently.
+    'variables': ['ROOT::VecOps::RVec<unsigned long long>(CleanJet_jetIdx)',
+                  f'ROOT::VecOps::RVec<float>(Jet_btag{bAlgo})',
+                  'ROOT::VecOps::RVec<float>(CleanJet_pt)',
+                  'ROOT::VecOps::RVec<float>(CleanJet_eta)'],
+    'external' : f'{macros}VBS_functions.cpp',
+    'samples'  : ALL
+}
+aliases['btag_j1']    = {'expr': 'btag_jets[0]', 'samples': ALL}
+aliases['btag_j2']    = {'expr': 'btag_jets[1]', 'samples': ALL}
+aliases['btag_max20'] = {'expr': 'btag_jets[2]', 'samples': ALL}
+
+# The two angles of the lepton pair that need no neutrino. ONE number each,
+# for the pair: in the rest frame of (l1 + l2) the momenta are exactly back to
+# back, so the subleading lepton would give exactly minus the leading one.
+aliases['lep_angles'] = {
+    'function' : 'computeLeptonAngles',
+    'variables': ['SelLep_pt', 'SelLep_eta', 'SelLep_phi', 'SelLep_pdgId'],
+    'external' : f'{macros}VBS_functions.cpp',
+    'samples'  : ALL
+}
+aliases['cosThetaCS']  = {'expr': 'lep_angles[0]', 'samples': ALL}
+aliases['cosThetaHel'] = {'expr': 'lep_angles[1]', 'samples': ALL}
+
+# The angle between the leading lepton and each tagging jet in the dilepton
+# rest frame: dimensionless, so it survives an energy-scale shift, and the
+# only engineered input of the two models that is not a branch or a one-line
+# expression. NaN where any input is sentinel, which the reader imputes.
+aliases['llrest_angles'] = {
+    'function' : 'dnnLeptonJetRestAngles',
+    'variables': [_absent('pt1'), _absent('eta1'), _absent('phi1'),
+                  _absent('pt2'), _absent('eta2'), _absent('phi2'),
+                  _jet(0, 'pt', '-1.f'), _jet(0, 'eta', '-99.f'),
+                  _jet(0, 'phi', '-99.f'), _jet_mass(0),
+                  _jet(1, 'pt', '-1.f'), _jet(1, 'eta', '-99.f'),
+                  _jet(1, 'phi', '-99.f'), _jet_mass(1)],
+    'external' : f'{macros}VBS_functions.cpp',
+    'samples'  : ALL
+}
+aliases['cos_l1j1_llrest'] = {'expr': 'llrest_angles[0]', 'samples': ALL}
+aliases['cos_l1j2_llrest'] = {'expr': 'llrest_angles[1]', 'samples': ALL}
+
+# ------------------------------------------------
+# The input vector
+#
+# ORDER IS THE INTERFACE. The reader indexes positionally and checks only the
+# length, so a permutation here feeds every network the wrong numbers with no
+# error anywhere. The second column is the name the training table used, i.e.
+# `features.json` of both runs, which the exporter also writes into the weight
+# file: diff the two before trusting a new export.
+# ------------------------------------------------
+dnn_features = [
+    # expression here                      # name in features.json
+    (_absent('pt1'),                        'dnn_l1_pt'),
+    (_absent('eta1'),                       'dnn_l1_eta'),
+    (_absent('pt2'),                        'dnn_l2_pt'),
+    (_absent('eta2'),                       'dnn_l2_eta'),
+    ('(float)(nLepSel > 0 ? Lepton_pdgId[0] : 0)', 'dnn_l1_pdgId'),
+    ('(float)(nLepSel > 1 ? Lepton_pdgId[1] : 0)', 'dnn_l2_pdgId'),
+    (_absent('mll'),                        'mll'),
+    (_absent('ptll'),                       'dnn_ptll'),
+    (_absent('drll'),                       'dnn_drll'),
+    (_absent('detall'),                     'dnn_detall'),
+    ('absdphill',                           'dnn_dphill'),
+    ('(float)PuppiMET_pt',                  'PuppiMET_pt'),
+    (_absent('proxyW_l1'),                  'proxyW_l1'),
+    (_absent('proxyW_l2'),                  'proxyW_l2'),
+    (_absent('mth'),                        'dnn_mTww'),
+    ('mTo',                                 'dnn_mTo'),
+    (_absent('dphilmet1'),                  'dnn_dphi_METl1'),
+    ('zepp_l1',                             'dnn_zepp_l1'),
+    ('zepp_l2',                             'dnn_zepp_l2'),
+    (_jet(0, 'pt', '-1.f'),                 'dnn_j1_pt'),
+    (_jet(0, 'eta', '-99.f'),               'dnn_j1_eta'),
+    (_jet(1, 'pt', '-1.f'),                 'dnn_j2_pt'),
+    (_jet(1, 'eta', '-99.f'),               'dnn_j2_eta'),
+    (_absent('mjj'),                        'mjj'),
+    ('dyjj',                                'dnn_dyjj'),
+    (_absent('drjj'),                       'dnn_drjj'),
+    ('absdphijj',                           'dnn_dphijj'),
+    (_absent('dphilep1jet1'),               'dnn_dphi_j1l1'),
+    (_absent('dphilep1jet2'),               'dnn_dphi_j2l1'),
+    ('Rpt',                                 'dnn_Rpt'),
+    ('drlj_min',                            'dnn_drlj_min'),
+    (_absent('detajj'),                     'detajj'),
+    ('btag_j1',                             'dnn_j1_btagUParTAK4B'),
+    ('btag_j2',                             'dnn_j2_btagUParTAK4B'),
+    ('btag_max20',                          'dnn_btag_max20'),
+    ('cosThetaCS',                          'dnn_cosThetaCS'),
+    ('cosThetaHel',                         'dnn_cosThetaHel'),
+    ('cos_l1j1_llrest',                     'n_cos_l1_j1_llrest'),
+    ('cos_l1j2_llrest',                     'n_cos_l1_j2_llrest'),
+    ('ptAsymll',                            'dnn_ptAsymll'),
+    (_absent('mT2'),                        'mT2'),
+    (_absent('zstar_max'),                  'zstar_max'),
+]
+aliases['dnn_inputs'] = {
+    'expr': ('ROOT::VecOps::RVec<float>{'
+             + ', '.join('(float)(%s)' % _e for _e, _n in dnn_features) + '}'),
+    'samples': ALL
+}
+
+# ------------------------------------------------
+# The models
+#
+# One global instance each, constructed once per job: the constructor reads
+# and validates the weight file, so a wrong path or a truncated file stops the
+# job instead of producing a column of zeros.
+#
+# Output layout, which dnn_reader_class.cc documents and enforces:
+#   two-stage  [0,1] stage-1 background/signal, [2..4] stage-2 LL/TL/TT,
+#              [5] stage-1 signal score, [6] cell, [7] unrolled
+#   multiclass [0..3] background/LL/TL/TT, [4] winning probability,
+#              [5] category, [6] unrolled
+# ------------------------------------------------
+aliases['dnn2s'] = {
+    'external'     : f'{macros}dnn_reader_class.cc',
+    'linesToGlobal': [
+        f'dnn_reader dnn2s_inst("{dnnweights}/twostage_uparT_open_64x32.root");'
+    ],
+    'function'     : 'dnn2s_inst',
+    # The event number selects the fold model when the weight file says
+    # `parity`; under `ensemble` the reader ignores it. It travels either way
+    # so that changing the rule is a re-export and not an edit here.
+    'variables'    : ['dnn_inputs', '(unsigned long long)event'],
+    'samples'      : ALL
+}
+aliases['dnn2s_p_LL']     = {'expr': 'dnn2s[2]', 'samples': ALL}
+aliases['dnn2s_p_TL']     = {'expr': 'dnn2s[3]', 'samples': ALL}
+aliases['dnn2s_p_TT']     = {'expr': 'dnn2s[4]', 'samples': ALL}
+aliases['dnn2s_signal']   = {'expr': 'dnn2s[5]', 'samples': ALL}
+aliases['dnn2s_cell']     = {'expr': 'dnn2s[6]', 'samples': ALL}
+aliases['dnn2s_unrolled'] = {'expr': 'dnn2s[7]', 'samples': ALL}
+# The unrolled variable with its cell stripped off: the stage-1 score mapped
+# through the frozen CDF of its own cell, uniform on [0, 1). Histogramming
+# this under a cut on dnn2s_cell bins one cell alone.
+aliases['dnn2s_q'] = {'expr': '(float)(dnn2s[7] - dnn2s[6])', 'samples': ALL}
+
+aliases['dnn4'] = {
+    'external'     : f'{macros}dnn_reader_class.cc',
+    'linesToGlobal': [
+        f'dnn_reader dnn4_inst("{dnnweights}/mc4_uparT_open_64x32.root");'
+    ],
+    'function'     : 'dnn4_inst',
+    'variables'    : ['dnn_inputs', '(unsigned long long)event'],
+    'samples'      : ALL
+}
+aliases['dnn4_p_bkg']    = {'expr': 'dnn4[0]', 'samples': ALL}
+aliases['dnn4_p_LL']     = {'expr': 'dnn4[1]', 'samples': ALL}
+aliases['dnn4_p_TL']     = {'expr': 'dnn4[2]', 'samples': ALL}
+aliases['dnn4_p_TT']     = {'expr': 'dnn4[3]', 'samples': ALL}
+aliases['dnn4_pmax']     = {'expr': 'dnn4[4]', 'samples': ALL}
+aliases['dnn4_cat']      = {'expr': 'dnn4[5]', 'samples': ALL}
+aliases['dnn4_unrolled'] = {'expr': 'dnn4[6]', 'samples': ALL}
+aliases['dnn4_q']        = {'expr': '(float)(dnn4[6] - dnn4[5])', 'samples': ALL}
+
+# Two continuous combinations the four-head model can define and the two-stage
+# one cannot, kept because they are the axes the DNN project's grid studies
+# used and they need no new export.
+aliases['dnn4_signal'] = {'expr': '(float)(1.f - dnn4[0])', 'samples': ALL}
+aliases['dnn4_LL_frac'] = {
+    'expr': '(float)(dnn4[1] / std::max(dnn4[1] + dnn4[2] + dnn4[3], 1e-15f))',
+    'samples': ALL
+}
