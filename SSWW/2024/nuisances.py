@@ -314,60 +314,31 @@ nuisances['UE_CP5']  = {
 _lhe_up   = 'LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[0] : 1.'
 _lhe_down = 'LHEScaleWeight_vec.size() > 0 ? LHEScaleWeight_vec[LHEScaleWeight_vec.size()-1] : 1.'
 
-## One nuisance per process: correlated across the samples that are the same
-## process at the same order, independent between processes. Three of the
-## groupings are a physics choice rather than bookkeeping, so they are spelt
-## out here:
+## One nuisance per SAMPLE, deliberately ungrouped. The grouped version -- Vg,
+## WZ_EWK, SSWW_EWK and the rest, correlated by process -- is the right physics
+## and is kept in the history; it is split here to isolate a bug, and should go
+## back once that bug is understood.
 ##
-##   Vg         Wg/Zg and WgS/ZgS are one amcatnlo sample each, split by the
-##              generator-level Z* mass window -- not two processes.
-##   WZ_EWK     the EWK WZ and its interference with the QCD one come from the
-##              same madgraph setup; the QCD WZ is powheg at another order in
-##              alpha_s and keeps its own.
-##   SSWW_EWK   the three polarised samples are the longitudinal decomposition
-##              of WW_EWK out of one madgraph setup, so a scale variation moves
-##              them together. Note this is a normalisation as much as a shape,
-##              and on the signals that part is partly degenerate with mu_LX;
-##              if the degeneracy bites, make it shape-only in the fit rather
-##              than splitting the nuisance here.
-_qcdscale = {
-    'DY'       : ['DY'],
-    'top'      : ['top'],
-    'tVx'      : ['tVx'],
-    'WZ'       : ['WZJJ_QCD', 'WZSJJ_QCD'],
-    'WZ_EWK'   : ['WZJJ_EWK', 'WZSJJ_EWK', 'WZJJ_Int'],
-    'Vg'       : ['Wg', 'Zg', 'WgS', 'ZgS'],
-    'VVV'      : ['VVV'],
-    'ggH'      : ['ggH_hww'],
-    'qqH'      : ['qqH_hww'],
-    'higgs'    : ['higgs'],
-    'OSWW'     : ['OSWW'],
-    'WW_QCD'   : ['WW_QCD'],
-    'WW_Int'   : ['WW_Int'],
-    'VBS_SSWW' : ['VBS_SSWW'],
-    'SSWW_EWK' : ['WW_EWK', 'VBS_SSWW_WWCM_LL', 'VBS_SSWW_WWCM_TL',
-                  'VBS_SSWW_WWCM_TT'],
-}
-
-## The check that stops this drifting away from samples.py again: every LHE
-## sample gets exactly one scale nuisance, and nothing names a sample that does
-## not exist. The previous version asked for 'WW', 'WZ' and 'WZS', none of them
-## a key of samples.py, and left fourteen samples with no scale uncertainty at
-## all -- silently, because a key matching no sample is simply never applied.
-## Add a sample to samples.py and this now fails loudly until it has a group.
-_covered = [s for _group in _qcdscale.values() for s in _group]
-assert sorted(_covered) == sorted(lhesamples), (
-    'QCDscale does not cover the LHE samples: missing %s, not a sample %s, '
-    'repeated %s' % (sorted(set(lhesamples) - set(_covered)),
-                     sorted(set(_covered) - set(lhesamples)),
-                     sorted({s for s in _covered if _covered.count(s) > 1})))
-
-for _proc, _skeys in _qcdscale.items():
-    nuisances['QCDscale_' + _proc] = {
-        'name'    : 'QCDscale_' + _proc,
+## What is being isolated: in the 261030_24 run every QCDscale variation came
+## out with the nominal event weight missing. Measured on WW_SR/events, the
+## varied integral is the sum of the scale factor alone, i.e. the MC event
+## count rather than the yield -- var/nom tracks rows/yield across four orders
+## of magnitude (DY 18.2 vs 21.0, OSWW 143 vs 178, top 682 vs 663, VVV 765 vs
+## 845, tVx 1730 vs 1916, higgs 9130 vs 10389). It is specific to QCDscale:
+## every other 'weight' nuisance in the same file is sane, median 1.0000
+## (btagSF, eff_e, eff_m, trigger, fake, ps_isr, ps_fsr), and it is not the
+## size of LHEScaleWeight, which is <= 1.7 on every LO sample.
+##
+## With one nuisance per sample the next run says which samples do it and which
+## do not, instead of averaging them inside a group. _lhe_up/_lhe_down are left
+## exactly as they were, on purpose: one change at a time, or the run answers a
+## different question.
+for _skey in lhesamples:
+    nuisances['QCDscale_' + _skey] = {
+        'name'    : 'QCDscale_' + _skey,
         'kind'    : 'weight',
         'type'    : 'shape',
-        'samples' : {s: [_lhe_up, _lhe_down] for s in _skeys},
+        'samples' : {_skey: [_lhe_up, _lhe_down]},
     }
 
 # ## PDF uncertainties - RDataFrame syntax (no Alt())
