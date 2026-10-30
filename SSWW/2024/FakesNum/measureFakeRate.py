@@ -279,7 +279,7 @@ JET_PT_MIN = 20.
 # overflow stays resolved instead of being clipped into 45-50.
 DEFAULT_PT = '10,15,20,25,30,35,40,45,50,65,100'
 DEFAULT_ETA = '-2.5,-2.0,-1.5,-1.0,-0.5,0,0.5,1.0,1.5,2.0,2.5'
-REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top', 'legacy')
+REGIONS = ('1l', 'ss_sf', 'ss_df', 'ss', 'dy', 'top', 'legacy')
 
 # Control-plot variables. 'pt' and 'eta' take the measurement binning, so a
 # control plot is binned exactly like the map it validates; the rest have their
@@ -326,6 +326,10 @@ CTRL_VARS = {
 # if the extra histograms are not wanted.
 CTRL_REGIONS = ('1l', 'ss_sf', 'ss_df', 'dy', 'top')
 
+# 'ss' is not in CTRL_REGIONS: it is the union of the two above, so plotting
+# all three by default would draw every same-sign event twice. Ask for it
+# explicitly with --ctrl-region ss.
+
 
 def ctrl_bcat_for(chan, requested):
     """The b-category a control region is plotted in.
@@ -340,6 +344,7 @@ REGION_LABELS = {
     '1l': 'QCD FR region (1 lepton)',
     'ss_sf': 'same-sign same-flavour',
     'ss_df': 'same-sign different-flavour',
+    'ss': 'same-sign, SF and DF pooled',
     'dy': 'DY CR (OS SF, Z peak)',
     'top': 'top CR (OS DF, b-tagged)',
     'legacy': 'AN-24-128 FR region (1 lepton, away jet)',
@@ -418,7 +423,8 @@ def hist1(x, w, bins):
     return np.histogram(x, bins=bins, weights=w)[0]
 
 
-def map_definitions(ele_wps, mu_wps, bcats, jetcats=('incl',), legacy=False):
+def map_definitions(ele_wps, mu_wps, bcats, jetcats=('incl',), legacy=False,
+                    pool_ss=False):
     """One entry per output map.
 
     The fake rate is measured in every requested b category: which jet made
@@ -469,6 +475,14 @@ def map_definitions(ele_wps, mu_wps, bcats, jetcats=('incl',), legacy=False):
                         (f'{tag}FR_emu_lep0_{bcat}{j}', flav, 0, 'FR', 'ss_df', wp, bcat, jcat),
                         (f'{tag}FR_emu_lep1_{bcat}{j}', flav, 1, 'FR', 'ss_df', wp, bcat, jcat),
                     ])
+                    if pool_ss:
+                        # The same probes as the two maps above, in one map
+                        # instead of two. Added, never substituted: the split
+                        # pair stays so the pooling can be checked against it.
+                        out.extend([
+                            (f'{tag}FR_ss_lep0_{bcat}{j}', flav, 0, 'FR', 'ss', wp, bcat, jcat),
+                            (f'{tag}FR_ss_lep1_{bcat}{j}', flav, 1, 'FR', 'ss', wp, bcat, jcat),
+                        ])
             out.extend([
                 (f'{tag}PR_{sf}_lep0', flav, 0, 'PR', 'dy', wp, 'incl', 'incl'),
                 (f'{tag}PR_{sf}_lep1', flav, 1, 'PR', 'dy', wp, 'incl', 'incl'),
@@ -599,7 +613,13 @@ def process_file(payload):
                 missing = [c for c in cols if c not in have]
                 if missing:
                     return {}, [f'{path}: missing {missing}; skipped']
-                wanted_trig = LEGACY_PATHS if cfg.get('legacy') else TRIGGERS
+                # --an-triggers reads both sets: the prescaled paths it
+                # selects on, and the analysis OR, which nothing selects on
+                # any more but which still builds `trig` and would otherwise
+                # be an empty mask nobody notices.
+                wanted_trig = (LEGACY_PATHS if cfg.get('legacy') else
+                               tuple(dict.fromkeys(TRIGGERS + LEGACY_PATHS))
+                               if cfg.get('an_triggers') else TRIGGERS)
                 thave = [c for c in wanted_trig if c in have]
                 if not thave:
                     return {}, [f'{path}: no trigger branches; skipped']
@@ -612,7 +632,8 @@ def process_file(payload):
         return {}, [f'{UNREADABLE} {path}: {error}']
     messages = ([f'{os.path.basename(path)}: absent trigger paths {tmissing}']
                 if tmissing else [])
-    if not cfg.get('legacy') and not any(t in thave for t in ALL_SINGLE):
+    if (not cfg.get('legacy') and not cfg.get('an_triggers')
+            and not any(t in thave for t in ALL_SINGLE)):
         messages.append(f'{os.path.basename(path)}: no single-lepton path; '
                         'the 1-lepton region is empty for this file')
     n = len(a['nLepSel'])
@@ -634,6 +655,24 @@ def process_file(payload):
     # it depends on the probe's flavour and pT. See LEGACY_TRIGGERS: the muon
     # factor changes by 27 across 20 GeV, which is why this cannot stay a
     # number. Events outside every band keep 0 and drop out on weight != 0.
+    # --an-triggers keeps our regions but borrows the AN's prescaled paths, so
+    # the effective luminosity comes back -- and this time the probe can be
+    # either slot, so there is one array per (flavour, slot) instead of one
+    # per event. It is factored out of `weight` here and multiplied back in
+    # by weight_of() inside each loop, which is the only place the slot is
+    # known.
+    an_trig_mode = bool(cfg.get('an_triggers'))
+
+    def band_lumi(flav, i):
+        out = np.zeros(n)
+        lo = 0.
+        for hi, _hlt, leff_pb in LEGACY_TRIGGERS[flav]:
+            band = ((pt[:, i] > lo) if hi is None else
+                    ((pt[:, i] > lo) & (pt[:, i] <= hi)))
+            out[band] = leff_pb / 1000.                   # pb-1 -> fb-1
+            lo = lo if hi is None else hi
+        return out
+
     if cfg.get('legacy'):
         lumi = np.zeros(n)
         for flav, code in (('ele', 11), ('mu', 13)):
@@ -644,6 +683,10 @@ def process_file(payload):
                         ((pt[:, 0] > lo) & (pt[:, 0] <= hi)))
                 lumi[isflav & band] = leff_pb / 1000.     # pb-1 -> fb-1
                 lo = lo if hi is None else hi
+    elif an_trig_mode:
+        lumi = 1.0
+        an_lumi = {flav: {i: band_lumi(flav, i) for i in (0, 1)}
+                   for flav in ('ele', 'mu')}
     else:
         lumi = cfg['lumi']
     weight = scale * (
@@ -678,7 +721,7 @@ def process_file(payload):
     # The legacy measurement needs no de-overlap: each Table 15 path lives in
     # one primary dataset, so the flavour selects the PD instead. See
     # LEGACY_PD, applied with the trigger below.
-    if is_data and not cfg.get('legacy'):
+    if is_data and not cfg.get('legacy') and not an_trig_mode:
         keep, veto = pd_rules(active)[pd]
         pd_mask = or_of(sum((PD_GROUPS[g] for g in keep), ()))
         for g in veto:
@@ -727,6 +770,10 @@ def process_file(payload):
         'top': (nlep == 2) & isos & ~issf & (mll > cfg['top_mll_min']) &
                (met > cfg['top_met_min']) & (nbtags[30.] >= cfg['top_min_btags']),
     }
+    # The two same-sign regions pooled. Written as the OR of the two rather
+    # than as its own cut list, so it cannot drift away from them: whatever
+    # ss_sf and ss_df select, this is exactly their union, Z veto included.
+    region['ss'] = region['ss_sf'] | region['ss_df']
     if cfg.get('legacy'):
         # AN-24-128 lines 496-500 and Eq. 17. The away jet is the part that
         # is NOT a function of anything else in the tree: dR to the LEADING
@@ -768,6 +815,47 @@ def process_file(payload):
             if is_data:
                 mask &= pd == LEGACY_PD[flav]
             trig['legacy'][flav] = mask
+    if an_trig_mode:
+        # The same prescaled paths as the legacy measurement, but the band
+        # is chosen by the pT of the probe in THIS slot, not by lepton 0's:
+        # in a two-lepton region the two slots can fall in different bands
+        # and therefore read different paths.
+        an_trig = {}
+        for flav in ('ele', 'mu'):
+            an_trig[flav] = {}
+            for i in (0, 1):
+                mask = np.zeros(n, dtype=bool)
+                lo = 0.
+                for hi, hlt, _leff in LEGACY_TRIGGERS[flav]:
+                    band = ((pt[:, i] > lo) if hi is None else
+                            ((pt[:, i] > lo) & (pt[:, i] <= hi)))
+                    if hlt in thave:
+                        mask |= band & ak.to_numpy(a[hlt]).astype(bool)
+                    lo = lo if hi is None else hi
+                mask &= pt[:, i] >= LEGACY_PT_MIN[flav]
+                if is_data:
+                    mask &= pd == LEGACY_PD[flav]
+                an_trig[flav][i] = mask
+
+    def trig_of(chan, flav, i):
+        """The trigger a given probe has to satisfy.
+
+        Normally a property of the region and the probe's flavour. Under
+        --an-triggers it is a property of the flavour and the SLOT, because
+        the AN partitions the probe pT spectrum between two prescaled paths.
+        """
+        return an_trig[flav][i] if an_trig_mode else trig[chan][flav]
+
+    def weight_of(flav, i):
+        """The event weight for a probe in this slot.
+
+        Only --an-triggers makes it slot dependent: the MC is normalised to
+        the effective luminosity of the path that probe's pT band selects.
+        """
+        if not an_trig_mode or is_data:
+            return weight
+        return weight * an_lumi[flav][i]
+
     prompt = (pad2(a['SelLep_promptgenmatched']).astype(bool)
               if not is_data else None)
     loose = {}
@@ -784,17 +872,18 @@ def process_file(payload):
     acc = {}
     # Histograms for maps: (mapname, tight/rest, data/mc, sumw/sumw2)
     for name, flav, i, kind, chan, wp, bcat, jcat in cfg['maps']:
-        sel = (region[chan] & trig[chan][flav] & bmask[bcat] &
+        W = weight_of(flav, i)
+        sel = (region[chan] & trig_of(chan, flav, i) & bmask[bcat] &
                jmask[jcat] & (nlep > i) &
                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                loose[flav][:, i] & np.isfinite(pt[:, i]) &
-               np.isfinite(eta[:, i]) & np.isfinite(weight) & (weight != 0))
+               np.isfinite(eta[:, i]) & np.isfinite(W) & (W != 0))
         xb, yb = cfg['bins'][flav]
         sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
         if not np.any(sel):
             continue
         x = np.clip(pt[sel, i], xb[0], np.nextafter(xb[-1], -np.inf))
-        y, w = eta[sel, i], weight[sel]
+        y, w = eta[sel, i], W[sel]
         t = tight[flav, wp][sel, i]
         # Two MC series, not one. 'mc' is the prompt component, which is what
         # the fake rate subtracts; 'mcnp' is the nonprompt one, which is the
@@ -810,7 +899,13 @@ def process_file(payload):
                 if not mask.any():
                     continue
                 for moment, ww in (('sumw', w[mask]), ('sumw2', w[mask]**2)):
-                    acc[('map', name, part, source, moment)] = hist2(
+                    # The WP belongs in the key.  Map names carry the flavour
+                    # tag, the region, the b and jet categories -- but not the
+                    # working point, because one name is written once per WP
+                    # into that WP's own directory.  Without the WP here every
+                    # iteration of the loop overwrote the previous one and all
+                    # the directories got the last WP's histogram, silently.
+                    acc[('map', name, wp, part, source, moment)] = hist2(
                         x[mask], y[mask], ww, xb, yb)
     # Control plots: data, and the MC split into prompt and nonprompt. Only
     # the prompt half is ever drawn (see make_plots); the nonprompt half is
@@ -826,17 +921,18 @@ def process_file(payload):
                     for i in (0, 1):
                         if chan in ('1l', 'legacy') and i == 1:
                             continue
-                        sel = (region[chan] & trig[chan][flav] &
+                        W = weight_of(flav, i)
+                        sel = (region[chan] & trig_of(chan, flav, i) &
                                bmask[bcat] & (nlep > i) &
                                (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                                loose[flav][:, i] & np.isfinite(pt[:, i]) &
-                               np.isfinite(eta[:, i]) & np.isfinite(weight) &
-                               (weight != 0))
+                               np.isfinite(eta[:, i]) & np.isfinite(W) &
+                               (W != 0))
                         xb, yb = cfg['bins'][flav]
                         sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
                         if not np.any(sel):
                             continue
-                        w = weight[sel]
+                        w = W[sel]
                         t = tight[flav, wp][sel, i]
                         quantity = {'pt': pt[sel, i], 'eta': eta[sel, i],
                                     'mll': mll[sel], 'met': met[sel],
@@ -906,18 +1002,19 @@ def process_file(payload):
             if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
                 continue
             for i in (0, 1):
-                sel = (region['dy'] & trig['dy'][flav] &
+                W = weight_of(flav, i)
+                sel = (region['dy'] & trig_of('dy', flav, i) &
                        bmask[cfg['sf_bcat']] & (nlep > i) &
                        (pdg[:, i] == (11 if flav == 'ele' else 13)) &
                        loose[flav][:, i] & np.isfinite(pt[:, i]) &
-                       np.isfinite(eta[:, i]) & np.isfinite(weight) &
-                       (weight != 0))
+                       np.isfinite(eta[:, i]) & np.isfinite(W) &
+                       (W != 0))
                 xb, yb = cfg['bins'][flav]
                 sel &= (eta[:, i] >= yb[0]) & (eta[:, i] < yb[-1])
                 if not np.any(sel):
                     continue
                 x = np.clip(pt[sel, i], xb[0], np.nextafter(xb[-1], -np.inf))
-                y, w = eta[sel, i], weight[sel]
+                y, w = eta[sel, i], W[sel]
                 t = tight[flav, wp][sel, i]
                 for part, mask in (('tight', t), ('rest', ~t)):
                     if not mask.any():
@@ -1176,6 +1273,11 @@ def compute_sf(total, cfg):
     as 0 would silently delete that MC instead of saying so.
     """
     out, empty = {}, defaultdict(int)
+    # --no-dy-sf: every factor is 1, by request and not by accident. The
+    # difference matters when the DY CR is thin rather than absent -- a
+    # handful of events there gives a factor that is noise, and multiplying
+    # the subtracted MC by noise is worse than not correcting it at all.
+    no_sf = cfg.get('no_dy_sf', False)
     for wp in cfg['all_wps']:
         for flav in ('ele', 'mu'):
             if wp not in (cfg['ele_wps'] if flav == 'ele' else cfg['mu_wps']):
@@ -1200,6 +1302,9 @@ def compute_sf(total, cfg):
                                    tmw + rmw, tmw2 + rmw2))):
                     sf = np.ones(shape)
                     err = np.zeros(shape)
+                    if no_sf:
+                        out[(wp, flav, i, part)] = (sf, err)
+                        continue
                     if cfg.get('sf_binned', False):
                         ok = (mw > 0) & (dw > 0)
                         sf[ok] = dw[ok] / mw[ok]
@@ -1349,8 +1454,10 @@ def make_plots(total, cfg, base, scale_factors, empty_bins):
         xb, yb = cfg['bins'][flav]
         path = os.path.join(base, wp, f'SF_dy_{flav}_lep{i}_{part}.png')
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        applied = '' if not cfg.get('no_dy_sf') else '  [NOT APPLIED]'
         plot_sf_map(plt, sf, err, xb, yb,
-                    f'DY CR scale factor | {flav} lepton {i + 1} | {part}\n{wp}',
+                    f'DY CR scale factor{applied} | {flav} lepton {i + 1} '
+                    f'| {part}\n{wp}',
                     path, empty_bins[(wp, flav, i, part)])
         written.append(path)
     for wp in cfg['ctrl_wps']:
@@ -1549,7 +1656,16 @@ UNREADABLE = 'UNREADABLE'
 
 CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'jetcats',
                     'ctrl_regions', 'ctrl_vars', 'ctrl_bcat', 'sf_bcat',
-                    'bins', 'lumi', 'legacy')
+                    'bins', 'lumi', 'legacy', 'an_triggers', 'pool_ss',
+                    'acc_format')
+
+# Bumped whenever the layout of the accumulator keys changes.  A part written
+# before the bump holds keys this code no longer looks up, and the maps would
+# come out empty rather than wrong -- but silently, since an empty map is also
+# what a region with no events gives.  The version travels in cfg so the merge
+# refuses the mismatch by the ordinary route.
+#   1 -> 2: the map keys carry the working point.
+ACC_FORMAT = 2
 
 
 def dump_partial(path, acc, problems, cfg, files):
@@ -1583,6 +1699,15 @@ def load_partials(directory):
             blob = pickle.load(fh)
         if cfg is None:
             cfg = blob['cfg']
+            # The whole set being old is self-consistent, so the key-by-key
+            # comparison below would never fire: check the first part against
+            # this code instead of against its siblings.
+            if cfg.get('acc_format', 1) != ACC_FORMAT:
+                raise SystemExit(
+                    f'{os.path.basename(path)} was written with accumulator '
+                    f'format {cfg.get("acc_format", 1)}, this is '
+                    f'{ACC_FORMAT}; the keys moved, so the maps would come '
+                    f'out empty. Resubmit the whole set.')
         else:
             differ = [k for k in CFG_KEYS_CHECKED
                       if blob['cfg'].get(k) != cfg.get(k)]
@@ -1779,6 +1904,10 @@ def batch_args(args, cfg):
     # the legacy defaults -- the bins above are already the resolved ones.
     if args.legacy:
         out.append('--legacy')
+    if args.an_triggers:
+        out.append('--an-triggers')
+    if args.pool_ss:
+        out.append('--pool-ss')
     return ' \\\n    '.join(out)
 
 
@@ -1804,6 +1933,23 @@ def main():
                          'Subtracts DY and W only. Every other default follows '
                          'from it, so the flag and --snapshot are the whole '
                          'command line')
+    ap.add_argument('--an-triggers', action='store_true',
+                    help='our measurement, their triggers: every region, '
+                         'binning, category, DY factor and prompt rate stays '
+                         'as it is, but the probe must have fired the AN\'s '
+                         'prescaled Table 15 path for its pT band instead of '
+                         'the analysis OR, the MC is normalised to that '
+                         "path's effective luminosity instead of --lumi, and "
+                         'the primary dataset is picked by the probe flavour '
+                         'as the AN does. Cannot be combined with --legacy, '
+                         'which changes the regions too')
+    ap.add_argument('--pool-ss', action='store_true',
+                    help='also measure the two same-sign regions pooled into '
+                         'one, <tag>FR_ss_lep<i>, on top of the usual split '
+                         'ee/mumu and emu maps. Same probes, one map: it buys '
+                         'a factor ~2 in statistics at the price of averaging '
+                         'over the pair flavour, which is what makes it worth '
+                         'having when the trigger is prescaled')
     ap.add_argument('--out', default='FakeRateMeasured')
     ap.add_argument('--year', default='2024_v15_pt_measured')
     ap.add_argument('--lumi', type=float, default=110.11)
@@ -1860,6 +2006,13 @@ def main():
                     default=[],
                     help=f'regions to make control plots for '
                          f'(default: {" ".join(CTRL_REGIONS)})')
+    ap.add_argument('--no-dy-sf', action='store_true',
+                    help='force every DY data/MC factor to 1, i.e. trust the '
+                         'MC normalisation as it is. A merge-time decision, '
+                         'like --sf-binned. Meant for runs whose DY control '
+                         'region is too thin to measure a factor -- notably '
+                         '--an-triggers, where the Z peak is triggered at a '
+                         'few hundred pb-1')
     ap.add_argument('--sf-binned', action='store_true',
                     help='measure the DY data/MC factor per (pT, eta) bin '
                          'instead of as one integral number per WP, flavour, '
@@ -1916,6 +2069,33 @@ def main():
                     help='make the control plots and skip the fake/prompt rate '
                          'maps entirely. Does not need ROOT')
     args = ap.parse_args()
+    if args.legacy and args.an_triggers:
+        ap.error('--legacy and --an-triggers both replace the trigger: '
+                 '--legacy is their whole measurement, --an-triggers is ours '
+                 'with their paths. Pick one')
+
+    def check_switch_points(label):
+        # The prescale cancels in the data ratio only because tight and loose
+        # come from the SAME path, which holds bin by bin only while no pT bin
+        # straddles a switch point: inside such a bin two prescales would be
+        # mixed and the cancellation would be approximate instead of exact.
+        straddled = []
+        for flav, bands in LEGACY_TRIGGERS.items():
+            for hi, _hlt, _leff in bands:
+                if hi is None:
+                    continue
+                if not any(abs(hi - edge) < 1e-9 for edge in args.pt_bins):
+                    straddled.append((flav, hi))
+        if straddled:
+            ap.error(
+                f'{label}: the trigger switch point(s) '
+                + ', '.join(f'{f} {h:g} GeV' for f, h in straddled)
+                + ' are not edges of --pt-bins '
+                + ','.join(f'{x:g}' for x in args.pt_bins)
+                + '. A bin crossing a switch point holds two prescales, so '
+                  'the prescale no longer cancels in the data tight/loose '
+                  'ratio. Add the edge, or drop --pt-bins for the default grid')
+
     # Legacy defaults. Applied only where the user did not ask for something
     # else, so --legacy stays overridable one option at a time -- which is
     # what makes it usable for "their measurement but with our binning".
@@ -1926,28 +2106,14 @@ def main():
             args.eta_bins_ele = parse_bins(LEGACY_ETA)
         if args.eta_bins_mu == parse_bins(DEFAULT_ETA):
             args.eta_bins_mu = parse_bins(LEGACY_ETA)
-        # The prescale cancels in the data ratio only because tight and loose
-        # come from the SAME path, which holds bin by bin only while no pT bin
-        # straddles a switch point: inside such a bin two prescales would be
-        # mixed and the cancellation would be approximate instead of exact.
         # With the default grid the switch points are bin edges; a hand-made
         # --pt-bins can break it, and in silence, so it is checked.
-        straddled = []
-        for flav, bands in LEGACY_TRIGGERS.items():
-            for hi, _hlt, _leff in bands:
-                if hi is None:
-                    continue
-                if not any(abs(hi - edge) < 1e-9 for edge in args.pt_bins):
-                    straddled.append((flav, hi))
-        if straddled:
-            ap.error(
-                'legacy: the trigger switch point(s) '
-                + ', '.join(f'{f} {h:g} GeV' for f, h in straddled)
-                + ' are not edges of --pt-bins '
-                + ','.join(f'{x:g}' for x in args.pt_bins)
-                + '. A bin crossing a switch point holds two prescales, so '
-                  'the prescale no longer cancels in the data tight/loose '
-                  'ratio. Add the edge, or drop --pt-bins for the legacy grid')
+        check_switch_points('legacy')
+    if args.an_triggers:
+        # Same requirement, and here the grid is OUR grid -- 10, 15, 20, 25,
+        # ... -- so 20 and 25 are edges and it passes by construction. It is
+        # checked anyway: --pt-bins is free in this mode too.
+        check_switch_points('an-triggers')
     if args.checkBatch:
         done, missing = check_batch(args.batch_dir)
         print(f'{len(done)} of {len(done) + len(missing)} jobs have a part')
@@ -2018,7 +2184,7 @@ def main():
     bins = {'ele': (args.pt_bins, args.eta_bins_ele),
             'mu': (args.pt_bins, args.eta_bins_mu)}
     maps = map_definitions(ele_wps, mu_wps, bcats, jetcats,
-                           legacy=args.legacy)
+                           legacy=args.legacy, pool_ss=args.pool_ss)
     # Without the single-lepton paths the 1-lepton region cannot be triggered
     # on its probe, so drop it from the maps and the control plots instead of
     # producing empty ones.
@@ -2026,7 +2192,7 @@ def main():
     singles_on = any(g in active_groups for g in SINGLE_GROUP.values())
     ctrl_regions = args.ctrl_region or (['legacy'] if args.legacy else
                                         list(CTRL_REGIONS))
-    if not singles_on:
+    if not singles_on and not args.an_triggers:
         dropped = len(maps)
         maps = [m for m in maps if m[4] != '1l']
         ctrl_regions = [r for r in ctrl_regions if r != '1l']
@@ -2048,7 +2214,9 @@ def main():
     if unknown_ctrl:
         ap.error(f'--ctrl-wp not among the measured working points: '
                  f'{unknown_ctrl}')
-    cfg = dict(ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
+    cfg = dict(acc_format=ACC_FORMAT, an_triggers=args.an_triggers,
+               pool_ss=args.pool_ss,
+               ele_wps=ele_wps, mu_wps=mu_wps, ctrl_wps=ctrl_wps,
                ctrl_regions=ctrl_regions,
                trigger_groups=active_groups,
                ctrl_vars=args.ctrl_var or list(DEFAULT_CTRL_VARS),
@@ -2093,6 +2261,29 @@ def main():
               flush=True)
     print(f'Categories: b {bcats}; jets {jetcats} '
           f'(on CleanJet above {JET_PT_MIN:g} GeV)', flush=True)
+    if args.an_triggers:
+        print('AN-TRIGGER MODE -- our measurement, their paths. Regions, '
+              'binning, categories, DY factors and prompt rate unchanged; '
+              'what is replaced:', flush=True)
+        for flav in ('ele', 'mu'):
+            bands = ' ; '.join(
+                f'pT {"<=" if hi is not None else ">"} '
+                f'{hi if hi is not None else LEGACY_TRIGGERS[flav][-2][0]:g}: '
+                f'{hlt} ({leff:g} pb-1)'
+                for hi, hlt, leff in LEGACY_TRIGGERS[flav])
+            print(f'  {flav}: {bands}', flush=True)
+        print(f'  band and effective luminosity follow the PROBE slot, so a '
+              f'2-lepton event can read two different paths; probe floor '
+              f'{LEGACY_PT_MIN["ele"]:g} (ele) / {LEGACY_PT_MIN["mu"]:g} (mu)',
+              flush=True)
+        print(f'  MC normalised to that path, NOT --lumi {args.lumi:g} fb-1',
+              flush=True)
+        print('  data: ' + ', '.join(f'{k} probes from {v}'
+                                     for k, v in LEGACY_PD.items())
+              + ' -- the analysis PD de-overlap is off', flush=True)
+        print('  WARNING: the dilepton regions are triggered at a few hundred '
+              'pb-1 instead of ~110 fb-1. Expect them nearly empty; the '
+              '1-lepton region is the one this mode is for', flush=True)
     if args.legacy:
         print('LEGACY MODE -- AN-24-128 section 6.2, not our measurement:',
               flush=True)
@@ -2188,6 +2379,7 @@ def main():
         # jobs have no opinion on it. Without this, the flag would be read
         # back from whatever the jobs happened to record.
         cfg['sf_binned'] = args.sf_binned
+        cfg['no_dy_sf'] = args.no_dy_sf
         ele_wps, mu_wps = cfg['ele_wps'], cfg['mu_wps']
         bcats, bins, maps = cfg['bcats'], cfg['bins'], cfg['maps']
         # Parts dumped before the jet axis existed carry 7-field maps and no
@@ -2267,29 +2459,53 @@ def main():
         print(f'... {len(problems)-30} more messages')
     base = os.path.join(os.path.expandvars(args.out), args.year)
     scale_factors, empty_bins = compute_sf(total, cfg)
+    shown_sf, shown_empty = scale_factors, empty_bins
     if cfg.get('legacy'):
         print('legacy: no DY data/MC factor, as in the AN -- every MC weight '
               'is the trigger effective luminosity and nothing else',
               flush=True)
+    elif cfg.get('no_dy_sf'):
+        # Forced to 1 for the arithmetic, measured anyway for the eye: the
+        # DY CR is still worth looking at even when it is too thin to
+        # correct with. These are the numbers that were NOT applied, and
+        # they are what the SF_dy_* figures draw.
+        shown_sf, shown_empty = compute_sf(total, dict(cfg, no_dy_sf=False))
+        print('--no-dy-sf: every DY data/MC factor forced to 1; the '
+              'subtracted MC keeps the normalisation it was produced with.',
+              flush=True)
+        print('  below, what the factors would have been -- measured, '
+              'reported, NOT applied:', flush=True)
+        for line in report_sf(shown_sf, shown_empty, cfg['ctrl_wps']):
+            print(line, flush=True)
     else:
+        dy_data = sum(
+            float(np.sum(v)) for k, v in total.items()
+            if k[0] == 'sf' and k[5] == 'data' and k[6] == 'sumw')
+        if cfg.get('an_triggers') and dy_data < 1000:
+            print(f'WARNING: --an-triggers and only {dy_data:.0f} data events '
+                  'in the DY control region. The factors below are measured '
+                  'on that, so they are noise, and they multiply the MC that '
+                  'gets subtracted. Re-merge with --no-dy-sf to set them to 1',
+                  flush=True)
         for line in report_sf(scale_factors, empty_bins, cfg['ctrl_wps']):
             print(line, flush=True)
-    def grab(name, part, source, moment, flav):
+    def grab(name, wp, part, source, moment, flav):
         shape = (len(bins[flav][0])-1, len(bins[flav][1])-1)
-        return total.get(('map', name, part, source, moment), np.zeros(shape))
+        return total.get(('map', name, wp, part, source, moment),
+                         np.zeros(shape))
     written = 0
     comparisons = []
     for name, flav, i, kind, _, wp, _, _ in maps:
         if args.plots_only:
             break
         xb, yb = bins[flav]
-        Td, Td2 = grab(name, 'tight', 'data', 'sumw', flav), grab(name, 'tight', 'data', 'sumw2', flav)
-        Rd, Rd2 = grab(name, 'rest', 'data', 'sumw', flav), grab(name, 'rest', 'data', 'sumw2', flav)
+        Td, Td2 = grab(name, wp, 'tight', 'data', 'sumw', flav), grab(name, wp, 'tight', 'data', 'sumw2', flav)
+        Rd, Rd2 = grab(name, wp, 'rest', 'data', 'sumw', flav), grab(name, wp, 'rest', 'data', 'sumw2', flav)
         # The fake rate subtracts the prompt MC; the prompt rate subtracts the
         # nonprompt contamination of the DY CR. Same arithmetic, other series.
         source = 'mc' if kind == 'FR' else 'mcnp'
-        Tm, Tm2 = grab(name, 'tight', source, 'sumw', flav), grab(name, 'tight', source, 'sumw2', flav)
-        Rm, Rm2 = grab(name, 'rest', source, 'sumw', flav), grab(name, 'rest', source, 'sumw2', flav)
+        Tm, Tm2 = grab(name, wp, 'tight', source, 'sumw', flav), grab(name, wp, 'tight', source, 'sumw2', flav)
+        Rm, Rm2 = grab(name, wp, 'rest', source, 'sumw', flav), grab(name, wp, 'rest', source, 'sumw2', flav)
         if not np.any(Td + Rd):
             continue
         # loose = tight + rest. The rate is tight / loose, so loose is
@@ -2366,8 +2582,10 @@ def main():
     print(f'Wrote {nhist} control objects (histograms and TEfficiency) '
           f'in {nfiles} controlplots.root')
     if not args.no_plots:
+        # shown_sf, not scale_factors: with --no-dy-sf the latter is all
+        # ones, and a figure of ones says nothing about the DY CR.
         nplots = make_plots(total, cfg, os.path.join(base, 'plots'),
-                            scale_factors, empty_bins)
+                            shown_sf, shown_empty)
         print(f'Wrote {nplots} control PNGs in {base}/plots')
     print(f'Read warnings/errors: {len(problems)}')
 
