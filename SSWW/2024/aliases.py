@@ -334,7 +334,7 @@ for kind, label in [
         }
 
     aliases['fakeW' + label] = {
-        'expr'   : 'fakeW2l%s + fakeW3l%s' % (label, label),
+        'expr'   : '(double)(fakeW2l%s + fakeW3l%s)' % (label, label),
         'samples': ['Fake'],
     }
 
