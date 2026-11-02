@@ -216,3 +216,12 @@ Makefile
 
 # Except ROOT files in utils/
 !SSWW/utils/**/*.root
+# macOS. The eos clone is browsed over an sshfs mount from a Mac, which writes
+# an AppleDouble companion "._X" next to every file X it touches, holding the
+# resource fork and the extended attributes. They are not ours and they are
+# never wanted in a commit. They also outlive the files they belong to: a
+# checkout that removes X leaves ._X behind as untracked junk, which is why a
+# map directory can look populated while holding no .root at all.
+._*
+.DS_Store
+.AppleDouble
