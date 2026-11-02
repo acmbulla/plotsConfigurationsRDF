@@ -3,9 +3,11 @@
 
 #include "ROOT/RVec.hxx"
 #include "TLorentzVector.h"
-#include <cmath>
-#include <limits>
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <limits>
 
 // Lepton mass from pdgId (e=11, mu=13)
 inline float lepton_mass(int pdgId) {
@@ -319,6 +321,297 @@ float mT2(
     mT2_val = std::min(mT2_val, std::min(mT1_allMET, mT2_allMET));
 
     return mT2_val;
+}
+
+//
+// computeLeptonAngles -- the angular structure that survives the two neutrinos
+//
+// What the measurement is defined by is cos(theta*): the polar angle of the
+// charged lepton in its own W rest frame against the W flight direction,
+// (1 - cos^2 theta*) for a longitudinal W and (1 -+ cos theta*)^2 for a
+// transverse one. It is not reconstructable in this channel, and the reason
+// is a counting, not a resolution problem: two neutrinos are six unknowns,
+// MET gives two constraints and m(l nu) = m_W on each W gives two more, so
+// four constraints for six unknowns leave a two-parameter family and not a
+// discrete ambiguity. (Dileptonic ttbar looks like the same problem and is
+// solvable only because the two top-mass constraints bring the count to six.)
+//
+// Neither ATLAS nor CMS reconstructs it here. The ATLAS same-sign WW
+// polarisation analysis (arXiv:2503.11317) feeds its DNNs only transverse
+// and visible quantities -- transverse masses, dphi, deta, dR, dy and the
+// Zeppenfeld variables -- and no cos(theta*) at all. The variable list in
+// aliases.py follows theirs.
+//
+// What this adds on top of that list is the angular structure of the
+// dilepton system, which is well defined without any neutrino:
+//
+//   [0] cosThetaCS   Collins-Soper polar angle of the pair. The CS axis
+//                    bisects the two beam directions in the pair rest frame,
+//                    which is what makes it insensitive to the unknown
+//                    longitudinal boost. Closed form in lab quantities.
+//   [1] cosThetaHel  cos of the angle between the LEADING lepton and the
+//                    pair flight direction, in the pair rest frame.
+//
+// Both are ONE number for the pair, not one per lepton. In the rest frame of
+// (l1 + l2) the two momenta are exactly back to back, so the subleading
+// lepton gives exactly minus the leading one for either definition: a second
+// branch would be -1 times the first and carry no information. Which lepton
+// is "leading" is a pT ordering and therefore arbitrary with respect to the
+// physics, so the sign of these two is meaningful only together with
+// dnn_ptAsymll; if an unordered variable is wanted, take |cos|.
+//
+// Returns -9999 unless there are exactly two leptons, as every other
+// function in this file does.
+//
+ROOT::RVec<float> computeLeptonAngles(
+    const ROOT::RVec<float>& pt,
+    const ROOT::RVec<float>& eta,
+    const ROOT::RVec<float>& phi,
+    const ROOT::RVec<int>&   pdgId
+) {
+    if ((int)pt.size() != 2) return {-9999.f, -9999.f};
+
+    TLorentzVector l1, l2;
+    l1.SetPtEtaPhiM(pt[0], eta[0], phi[0], lepton_mass(pdgId[0]));
+    l2.SetPtEtaPhiM(pt[1], eta[1], phi[1], lepton_mass(pdgId[1]));
+    TLorentzVector ll = l1 + l2;
+
+    const double m  = ll.M();
+    const double qT = ll.Pt();
+    if (m <= 0.) return {-9999.f, -9999.f};
+
+    // ---- Collins-Soper, closed form in lab quantities
+    const double r2  = std::sqrt(2.);
+    const double P1p = (l1.E() + l1.Pz()) / r2;
+    const double P1m = (l1.E() - l1.Pz()) / r2;
+    const double P2p = (l2.E() + l2.Pz()) / r2;
+    const double P2m = (l2.E() - l2.Pz()) / r2;
+
+    double cosCS = 2. * (P1p * P2m - P1m * P2p) / (m * std::sqrt(m * m + qT * qT));
+    // the CS z axis is oriented along the pair's own longitudinal motion
+    if (ll.Pz() < 0.) cosCS = -cosCS;
+
+    // ---- helicity angle of the pair
+    double cosHel = -9999.;
+    if (ll.Vect().Mag() > 0.) {
+        TLorentzVector l1s = l1;
+        l1s.Boost(-ll.BoostVector());
+        if (l1s.Vect().Mag() > 0.)
+            cosHel = l1s.Vect().Unit().Dot(ll.Vect().Unit());
+    }
+
+    return {(float)cosCS, (float)cosHel};
+}
+
+
+//
+// deltaYjj -- RAPIDITY gap of the two tagging jets
+//
+// Not the same as detajj. The analysis regions cut on the pseudorapidity gap
+// and that stays as it is, but the ATLAS polarisation DNN
+// (arXiv:2503.11317, Table 2) uses the rapidity difference, and for a
+// massive jet the two differ. Rapidity is also the quantity that is additive
+// under a longitudinal boost, which is what a Zeppenfeld-like variable is
+// really about.
+//
+// Takes the jet masses already gathered through CleanJet_jetIdx, so this
+// function never sees the ULong64_t index type.
+//
+float deltaYjj(
+    const ROOT::RVec<float>& jet_pt,
+    const ROOT::RVec<float>& jet_eta,
+    const ROOT::RVec<float>& jet_mass
+) {
+    if ((int)jet_pt.size() < 2) return -1.f;
+
+    auto rapidity = [](float pt, float eta, float mass) -> double {
+        const double pz = pt * std::sinh(eta);
+        const double e  = std::sqrt(pt * pt * std::cosh(eta) * std::cosh(eta)
+                                    + (double)mass * mass);
+        if (e <= std::abs(pz)) return (double)eta;   // degenerate, fall back
+        return 0.5 * std::log((e + pz) / (e - pz));
+    };
+
+    const double y1 = rapidity(jet_pt[0], jet_eta[0], jet_mass.size() > 0 ? jet_mass[0] : 0.f);
+    const double y2 = rapidity(jet_pt[1], jet_eta[1], jet_mass.size() > 1 ? jet_mass[1] : 0.f);
+    return (float)std::abs(y1 - y2);
+}
+
+
+//
+// minDeltaRLepJet
+// Smallest DeltaR between any selected lepton and any jet above 30 GeV.
+// Returns -1 when either collection is empty after the pt cut.
+//
+// Written as an explicit double loop rather than as an RVec expression on
+// purpose: ROOT::VecOps::DeltaR is ELEMENT-WISE and throws
+// "Cannot call operator - on vectors of different sizes" the moment the two
+// collections have different lengths, which for leptons against jets is
+// almost always. The pt threshold is a constructor-style constant and so
+// cannot be a column, hence it lives here (CLAUDE.md section 7, constraint 1).
+//
+float minDeltaRLepJet(
+    const ROOT::RVec<float>& lep_eta,
+    const ROOT::RVec<float>& lep_phi,
+    const ROOT::RVec<float>& jet_pt,
+    const ROOT::RVec<float>& jet_eta,
+    const ROOT::RVec<float>& jet_phi
+) {
+    const float jetPtMin = 30.f;
+    const int nL = (int)std::min(lep_eta.size(), lep_phi.size());
+    const int nJ = (int)std::min(jet_pt.size(), std::min(jet_eta.size(), jet_phi.size()));
+
+    float best = std::numeric_limits<float>::max();
+    for (int iL = 0; iL < nL; ++iL) {
+        for (int iJ = 0; iJ < nJ; ++iJ) {
+            if (jet_pt[iJ] <= jetPtMin) continue;
+            const float deta = lep_eta[iL] - jet_eta[iJ];
+            float dphi = lep_phi[iL] - jet_phi[iJ];
+            while (dphi >  M_PI) dphi -= 2*M_PI;
+            while (dphi < -M_PI) dphi += 2*M_PI;
+            const float dr = std::sqrt(deta*deta + dphi*dphi);
+            if (dr < best) best = dr;
+        }
+    }
+    return (best == std::numeric_limits<float>::max()) ? -1.f : best;
+}
+
+//
+// dnnJetBtag -- the continuous UParT inputs of the deployed networks
+//
+// Three numbers, in one pass because they share the CleanJet -> Jet index
+// lookup:
+//
+//   [0] score of the leading-pT CleanJet        (dnn_j1_btagUParTAK4B)
+//   [1] score of the subleading-pT CleanJet     (dnn_j2_btagUParTAK4B)
+//   [2] largest score among CENTRAL jets        (dnn_btag_max20)
+//
+// The first two are the two tagging jets as the analysis defines them, i.e.
+// pT-ordered, NOT the two highest scores. The third is the central-jet
+// b-tag information in continuous form -- the maximum over every CleanJet
+// with pT > 20 and |eta| < 2.5, which deliberately includes a 20-30 GeV
+// third jet that the tagging pair requirement excludes.
+//
+// A jet whose CleanJet_jetIdx does not point into Jet_btag*, and an event
+// with no central jet at all, both give -9999: the networks' preprocessing
+// imputes that and raises an absence indicator, and for the b-tag maximum
+// the *absence* of a central jet is itself the VBS signature. Patching it
+// to 0 or -1 here would hide it. Mirrors `summaries` and `leading_scores`
+// in the DNN project (projects/btag_open/read_dataset.py and
+// add_jet_scores.py), which is what the training table was built with.
+//
+ROOT::RVec<float> dnnJetBtag(
+    const ROOT::RVec<unsigned long long>& CleanJet_jetIdx,
+    const ROOT::RVec<float>& Jet_btag,
+    const ROOT::RVec<float>& CleanJet_pt,
+    const ROOT::RVec<float>& CleanJet_eta)
+{
+    ROOT::RVec<float> out(3, -9999.f);
+    const std::size_t n_clean = CleanJet_jetIdx.size();
+    const std::size_t n_jet   = Jet_btag.size();
+    bool any_central = false;
+    float best = -9999.f;
+
+    for (std::size_t i = 0; i < n_clean; ++i) {
+        // CleanJet_jetIdx is unsigned 64-bit in these nanoAODs, so an
+        // unmatched entry wraps to a huge value rather than going negative;
+        // the bound check catches both spellings.
+        const unsigned long long idx = CleanJet_jetIdx[i];
+        const bool valid = (idx < n_jet);
+        const float score = valid ? Jet_btag[idx] : -9999.f;
+
+        if (i < 2) {
+            // The per-jet inputs additionally reject a non-finite or
+            // negative score, which is how the training table was filled.
+            out[i] = (valid && std::isfinite(score) && score >= 0.f) ? score : -9999.f;
+        }
+        if (valid && i < CleanJet_pt.size() && i < CleanJet_eta.size()
+            && CleanJet_pt[i] > 20.f && std::abs(CleanJet_eta[i]) < 2.5f) {
+            if (!any_central || score > best) best = score;
+            any_central = true;
+        }
+    }
+    out[2] = any_central ? best : -9999.f;
+    return out;
+}
+
+
+//
+// dnnLeptonJetRestAngles -- cos of the angle between the leading lepton and
+// each tagging jet, measured in the rest frame of the lepton pair.
+//
+//   [0] n_cos_l1_j1_llrest
+//   [1] n_cos_l1_j2_llrest
+//
+// The only two engineered inputs of the deployed networks that are not a
+// branch or a one-line alias. They are dimensionless, so they survive an
+// energy-scale shift, and they measure the orientation of the lepton pair
+// against the VBS jet axis rather than a polar decay angle -- which is why
+// they are not a proxy for the cos(theta*) that this channel cannot
+// reconstruct.
+//
+// The inputs are the sentinel-guarded scalar aliases, not the collections,
+// so that this reproduces `dnn/derived.py` of the DNN project input for
+// input. If any of them carries a sentinel the angle is meaningless rather
+// than merely wrong, so the result is NaN and the networks' preprocessing
+// imputes it and flags it, exactly as the training table did.
+//
+// gamma comes from the invariant mass and not from 1/sqrt(1 - beta^2): the
+// latter loses all its precision as beta approaches one, which is the
+// forward region this analysis lives in.
+//
+ROOT::RVec<float> dnnLeptonJetRestAngles(
+    float l1_pt, float l1_eta, float l1_phi,
+    float l2_pt, float l2_eta, float l2_phi,
+    float j1_pt, float j1_eta, float j1_phi, float j1_mass,
+    float j2_pt, float j2_eta, float j2_phi, float j2_mass)
+{
+    const float inputs[14] = {l1_pt, l1_eta, l1_phi, l2_pt, l2_eta, l2_phi,
+                              j1_pt, j1_eta, j1_phi, j1_mass,
+                              j2_pt, j2_eta, j2_phi, j2_mass};
+    for (float v : inputs)
+        if (!std::isfinite(v) || v == -9999.f || v == -1.f || v == -99.f)
+            return ROOT::RVec<float>(2, std::numeric_limits<float>::quiet_NaN());
+
+    auto four = [](double pt, double eta, double phi, double mass) {
+        const double px = pt * std::cos(phi);
+        const double py = pt * std::sin(phi);
+        const double pz = pt * std::sinh(eta);
+        const double e  = std::sqrt(std::max(0.0, mass*mass + px*px + py*py + pz*pz));
+        return std::array<double, 4>{e, px, py, pz};
+    };
+    const auto l1 = four(l1_pt, l1_eta, l1_phi, 0.0);
+    const auto l2 = four(l2_pt, l2_eta, l2_phi, 0.0);
+    const auto j1 = four(j1_pt, j1_eta, j1_phi, j1_mass);
+    const auto j2 = four(j2_pt, j2_eta, j2_phi, j2_mass);
+    const std::array<double, 4> ll = {l1[0] + l2[0], l1[1] + l2[1],
+                                      l1[2] + l2[2], l1[3] + l2[3]};
+
+    const double m2 = ll[0]*ll[0] - ll[1]*ll[1] - ll[2]*ll[2] - ll[3]*ll[3];
+    const double m = std::sqrt(std::max(1e-12, m2));
+    const double beta[3] = {ll[1] / ll[0], ll[2] / ll[0], ll[3] / ll[0]};
+    const double b2 = beta[0]*beta[0] + beta[1]*beta[1] + beta[2]*beta[2];
+    const double gamma = ll[0] / m;
+
+    auto boost = [&](const std::array<double, 4>& p) {
+        const double bp = beta[0]*p[1] + beta[1]*p[2] + beta[2]*p[3];
+        const double factor = (b2 > 1e-12) ? (gamma - 1.0) * bp / std::max(b2, 1e-12) : 0.0;
+        const double shift = factor - gamma * p[0];
+        return std::array<double, 3>{p[1] + shift * beta[0],
+                                     p[2] + shift * beta[1],
+                                     p[3] + shift * beta[2]};
+    };
+    const auto a = boost(l1);
+
+    auto cosine = [&](const std::array<double, 4>& p) {
+        const auto b = boost(p);
+        const double na = std::sqrt(a[0]*a[0] + a[1]*a[1] + a[2]*a[2]);
+        const double nb = std::sqrt(b[0]*b[0] + b[1]*b[1] + b[2]*b[2]);
+        const double dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+        return std::max(-1.0, std::min(1.0, dot / std::max(na * nb, 1e-12)));
+    };
+    return ROOT::RVec<float>{static_cast<float>(cosine(j1)),
+                             static_cast<float>(cosine(j2))};
 }
 
 
