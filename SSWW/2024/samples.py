@@ -453,10 +453,12 @@ samples['qqH_hww'] = {
 #    'useParts'  : [0, 1, 2, 3],
 }
 
+# nanoGetSampleFiles(mcDirectory, 'VBFHToTauTau_M125') | \
+# does not have PS uncertainties.. 
+
 files = nanoGetSampleFiles(mcDirectory, 'VH-HToNon2B') | \
         nanoGetSampleFiles(mcDirectory, 'ttHToNonbb_M125') | \
         nanoGetSampleFiles(mcDirectory, 'GluGluHToZZTo4L_M125') | \
-        nanoGetSampleFiles(mcDirectory, 'VBFHToTauTau_M125') | \
         nanoGetSampleFiles(mcDirectory, 'VBFHToZZTo4L_M125') | \
         nanoGetSampleFiles(mcDirectory, 'GluGluHToTauTau_M125')
 
