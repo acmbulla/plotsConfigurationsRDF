@@ -641,20 +641,17 @@ for _tag, _flav, _wp in [('Ele', 'ele', eleWP), ('Mu', 'mu', muWP)]:
 #
 # They are served from SSWW/2024/rootFile/dnn. That directory sits under
 # mkShapes' output folder, which .gitignore lists on every branch, so git never
-# adds or removes anything in it at a checkout -- which is the whole point. The
-# jobs read this path on eos, and a checkout of a branch that does not track
-# SSWW/utils/data/dnn deletes that directory: switching the eos clone to
-# FakeRate did exactly that and every job died with
-# "dnn_reader: cannot open ...". Being under rootFile also puts the weights
+# adds or removes anything in it at a checkout -- which is the whole point: a
+# checkout that removed the weights under the running jobs is what killed them
+# once, with "dnn_reader: cannot open ...". Being under rootFile also puts them
 # beside the per-tagger subdirectories rather than inside one, so cleaning a
 # tagger does not take them.
 #
-# The copies under SSWW/utils/data/dnn stay tracked, because they are the record
-# of which network produced a given set of plots and they are half a megabyte.
-# After re-exporting a model, copy them across or the jobs go on reading the old
-# network without saying anything:
-#
-#   cp SSWW/utils/data/dnn/*.root SSWW/2024/rootFile/dnn/
+# This branch tracks NO copy of the weights -- they are deliberately out of the
+# repository and out of its history. So the file on eos is the only copy, and
+# nothing here records which network produced a given set of plots: after
+# re-exporting a model, put the new file in place yourself, because the jobs go
+# on reading whatever is at that path without saying anything.
 #
 dnnweights = 'root://eosuser.cern.ch//eos/user/a/abulla/latinoRDF/plotsConfigurationsRDF/SSWW/2024/rootFile/dnn'
 
