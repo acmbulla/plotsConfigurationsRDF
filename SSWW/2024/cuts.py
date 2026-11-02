@@ -4,15 +4,15 @@
 #   (the >= 5 veto stays on the full collection: it stands in for the AN's veto
 #   on five or more *loose* leptons)
 # - leading lepton pT > 25; the subleading > 10 is implied by nLepSel > 1
-# - at least 2 jets with pT > 50 and |eta| < 5
+# - at least 2 jets with pT > 30 and |eta| < 5
 # ------------------------------------------------
 supercut = (
     '  nLepSel > 1'
     ' && Lepton_pt.size() < 5'
     ' && (Lepton_pt.size() > 0 ? Lepton_pt[0] : -99) > 25'
     ' && CleanJet_pt.size() > 1'
-    ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 50'
-    ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 50'
+    ' && (CleanJet_pt.size() > 0 ? CleanJet_pt[0] : -99) > 30'
+    ' && (CleanJet_pt.size() > 1 ? CleanJet_pt[1] : -99) > 30'
     ' && (CleanJet_pt.size() > 0 ? abs(CleanJet_eta[0]) : 99) < 5.0'
     ' && (CleanJet_pt.size() > 1 ? abs(CleanJet_eta[1]) : 99) < 5.0'
 )
@@ -87,23 +87,22 @@ supercut = (
 # WW Signal Region
 # 2 leptons, same-sign, pT > 25/20
 # ------------------------------------------------
-cuts['WW_SR'] = {
+cuts['WW_joint'] = {
     'expr': (
         'nLepSel == 2'
         ' && Lepton_pt[1] > 20'
         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'          # same-sign in base region
         ' && mll > 20'
         ' && PuppiMET_pt > 30'
-        ' && bVeto'
         ' && zstar_max < 0.75'
-        ' && mjj > 500'
-        ' && detajj > 2.5'
+        ' && mjj > 200'
     ),
-    # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
-    #     'mumu' : 'mumu',
-    #     'emu'  : 'emu',
-    # }
+    'categories': {
+        'SR'   : 'bVeto && detajj > 2.5 && mjj > 500',
+        'nonprompt_CR' : 'bReq && detajj > 2.5 && mjj > 500',
+        'WW_VR_btag'  : 'bReq && mjj > 200 && mjj < 500',
+        'WW_VR_bveto' : 'bVeto && mjj > 200 && mjj < 500',
+    }
 }
 
 # ------------------------------------------------
@@ -133,27 +132,27 @@ cuts['WZ_SR'] = {
     # }
 }
 
-# ------------------------------------------------
-# Nonprompt CR (WW SR with b-tag required)
-# ------------------------------------------------
-cuts['nonprompt_CR'] = {
-    'expr': (
-        'nLepSel == 2'
-        ' && Lepton_pt[1] > 20'
-        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
-        ' && mll > 20'
-        ' && PuppiMET_pt > 30'
-        ' && bReq'
-        ' && zstar_max < 0.75'
-        ' && mjj > 500'
-        ' && detajj > 2.5'
-    ),
-    # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
-    #     'mumu' : 'mumu',
-    #     'emu'  : 'emu',
-    # }
-}
+# # ------------------------------------------------
+# # Nonprompt CR (WW SR with b-tag required)
+# # ------------------------------------------------
+# cuts['nonprompt_CR'] = {
+#     'expr': (
+#         'nLepSel == 2'
+#         ' && Lepton_pt[1] > 20'
+#         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
+#         ' && mll > 20'
+#         ' && PuppiMET_pt > 30'
+#         ' && bReq'
+#         ' && zstar_max < 0.75'
+#         ' && mjj > 500'
+#         ' && detajj > 2.5'
+#     ),
+#     # 'categories': {
+#     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+#     #     'mumu' : 'mumu',
+#     #     'emu'  : 'emu',
+#     # }
+# }
 
 # ------------------------------------------------
 # WZb CR (WZ SR with b-tag required)
@@ -184,41 +183,41 @@ cuts['WZb_CR'] = {
 # ------------------------------------------------
 # QCD WW Validation Regions (200 < mjj < 500, no detajj cut)
 # ------------------------------------------------
-cuts['WW_VR_bveto'] = {
-    'expr': (
-        'nLepSel == 2'
-        ' && Lepton_pt[1] > 20'
-        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
-        ' && mll > 20'
-        ' && PuppiMET_pt > 30'
-        ' && bVeto'
-        ' && zstar_max < 0.75'
-        ' && mjj > 200 && mjj < 500'
-    ),
-    # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
-    #     'mumu' : 'mumu',
-    #     'emu'  : 'emu',
-    # }
-}
+# cuts['WW_VR_bveto'] = {
+#     'expr': (
+#         'nLepSel == 2'
+#         ' && Lepton_pt[1] > 20'
+#         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
+#         ' && mll > 20'
+#         ' && PuppiMET_pt > 30'
+#         ' && bVeto'
+#         ' && zstar_max < 0.75'
+#         ' && mjj > 200 && mjj < 500'
+#     ),
+#     # 'categories': {
+#     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+#     #     'mumu' : 'mumu',
+#     #     'emu'  : 'emu',
+#     # }
+# }
 
-cuts['WW_VR_btag'] = {
-    'expr': (
-        'nLepSel == 2'
-        ' && Lepton_pt[1] > 20'
-        ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
-        ' && mll > 20'
-        ' && PuppiMET_pt > 30'
-        ' && bReq'
-        ' && zstar_max < 0.75'
-        ' && mjj > 200 && mjj < 500'
-    ),
-    # 'categories': {
-    #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
-    #     'mumu' : 'mumu',
-    #     'emu'  : 'emu',
-    # }
-}
+# cuts['WW_VR_btag'] = {
+#     'expr': (
+#         'nLepSel == 2'
+#         ' && Lepton_pt[1] > 20'
+#         ' && (ee && !(abs(mll - 91.2) < 15) || mumu || emu)'
+#         ' && mll > 20'
+#         ' && PuppiMET_pt > 30'
+#         ' && bReq'
+#         ' && zstar_max < 0.75'
+#         ' && mjj > 200 && mjj < 500'
+#     ),
+#     # 'categories': {
+#     #     'ee'   : 'ee && !(abs(mll - 91.2) < 15)',
+#     #     'mumu' : 'mumu',
+#     #     'emu'  : 'emu',
+#     # }
+# }
 
 # ------------------------------------------------
 # QCD WZ Validation Regions (200 < mjj < 500, no detajj cut)
