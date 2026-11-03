@@ -762,10 +762,17 @@ def process_file(payload):
     met = ak.to_numpy(a['PuppiMET_pt']).astype(float)
     mt0 = ak.to_numpy(a['mt_l0']).astype(float)
     inz = np.abs(mll - 91.2) < 15.
+    # An optional MET ceiling on the same-sign regions. The analysis cuts
+    # PuppiMET from BELOW, so a ceiling here makes the measurement region
+    # ORTHOGONAL to the signal region: no event can satisfy both. Deliberately
+    # not applied to 'dy', because the prompt rate has to stay the one the
+    # weight reads and the Z peak is low-MET anyway, nor to 'top', which cuts
+    # MET from below by construction.
+    ssmet = (met < cfg['ss_met_max']) if cfg.get('ss_met_max') else True
     region = {
         '1l': (nlep == 1) & (met < 30.) & (mt0 < 30.),
-        'ss_sf': (nlep == 2) & isss & issf & (mll > 12.) & ~(isee & inz),
-        'ss_df': (nlep == 2) & isss & ~issf & (mll > 12.),
+        'ss_sf': (nlep == 2) & isss & issf & (mll > 12.) & ~(isee & inz) & ssmet,
+        'ss_df': (nlep == 2) & isss & ~issf & (mll > 12.) & ssmet,
         'dy': (nlep == 2) & isos & issf & inz,
         'top': (nlep == 2) & isos & ~issf & (mll > cfg['top_mll_min']) &
                (met > cfg['top_met_min']) & (nbtags[30.] >= cfg['top_min_btags']),
@@ -1657,7 +1664,7 @@ UNREADABLE = 'UNREADABLE'
 CFG_KEYS_CHECKED = ('ele_wps', 'mu_wps', 'ctrl_wps', 'bcats', 'jetcats',
                     'ctrl_regions', 'ctrl_vars', 'ctrl_bcat', 'sf_bcat',
                     'bins', 'lumi', 'legacy', 'an_triggers', 'pool_ss',
-                    'acc_format')
+                    'ss_met_max', 'trigger_groups', 'acc_format')
 
 # Bumped whenever the layout of the accumulator keys changes.  A part written
 # before the bump holds keys this code no longer looks up, and the maps would
@@ -1879,6 +1886,7 @@ def batch_args(args, cfg):
             ('--btag-wp', args.btag_wp, None),
             ('--loose-ele', args.loose_ele, ''),
             ('--loose-mu', args.loose_mu, ''),
+            ('--ss-met-max', args.ss_met_max, None),
             ('--top-met-min', args.top_met_min, None),
             ('--top-mll-min', args.top_mll_min, None),
             ('--top-min-btags', args.top_min_btags, None),
@@ -1986,6 +1994,12 @@ def main():
     ap.add_argument('--max-files-per-sample', type=int, default=0,
                     help='cap per sample, evenly spread over its datasets, '
                          'applied on top of the fractions')
+    ap.add_argument('--ss-met-max', type=float, default=None,
+                    help='PuppiMET ceiling on the two same-sign regions, in '
+                         'GeV. Off by default. The analysis cuts MET from '
+                         'below, so a ceiling here makes the measurement '
+                         'orthogonal to it. Not applied to the DY or top '
+                         'control regions')
     ap.add_argument('--top-met-min', type=float, default=30.)
     ap.add_argument('--top-mll-min', type=float, default=12.)
     ap.add_argument('--top-min-btags', type=int, default=1)
@@ -2228,6 +2242,7 @@ def main():
                maps=maps, lumi=args.lumi, loose_ele=args.loose_ele,
                loose_mu=args.loose_mu, btag_thr=BTAG_WPS[args.btag_wp],
                legacy=args.legacy,
+               ss_met_max=args.ss_met_max,
                retries=args.retries, top_met_min=args.top_met_min,
                top_mll_min=args.top_mll_min, top_min_btags=args.top_min_btags)
     # Fail in the first second, not after the event loop: --dump writes its one
@@ -2312,6 +2327,10 @@ def main():
           flush=True)
     # Only when it is actually being made: the top CR is a control plot and
     # nothing else, so announcing it on a run that excluded it is a lie.
+    if args.ss_met_max is not None:
+        print(f'same-sign regions: PuppiMET < {args.ss_met_max:g} '
+              f'(orthogonal to the analysis; DY and top CR untouched)',
+              flush=True)
     if 'top' in cfg['ctrl_regions']:
         print(f'top CR (control plots only, defined here and not in cuts.py): '
               f'OS e-mu, MET>{args.top_met_min}, mll>{args.top_mll_min}, '
